@@ -25,7 +25,19 @@ web/      React SPA: register/login, username search, chat UI, client-side crypt
 
 ## Running locally
 
-### 1. Database
+### Option A: Docker Compose (easiest — no local Node/Postgres install needed)
+
+Just install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then:
+
+```bash
+docker compose up
+```
+
+This starts Postgres, runs the migrations, and starts both the backend (`:4000`) and frontend (`:5173`). Open `http://localhost:5173`.
+
+### Option B: Run natively
+
+#### 1. Database
 
 ```bash
 # requires a running PostgreSQL instance
@@ -33,7 +45,7 @@ createuser river --pwprompt
 createdb river -O river
 ```
 
-### 2. Backend
+#### 2. Backend
 
 ```bash
 cd server
@@ -43,7 +55,7 @@ npx prisma migrate dev
 npm run dev             # listens on :4000
 ```
 
-### 3. Frontend
+#### 3. Frontend
 
 ```bash
 cd web
