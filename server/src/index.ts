@@ -2,11 +2,10 @@ import "dotenv/config";
 import http from "node:http";
 import express from "express";
 import cors from "cors";
-import authRouter from "./routes/auth.js";
-import usersRouter from "./routes/users.js";
-import keysRouter from "./routes/keys.js";
-import { messagesRouter } from "./routes/messages.js";
-import filesRouter from "./routes/files.js";
+import agentsRouter from "./routes/agents.js";
+import { conversationsRouter } from "./routes/conversations.js";
+import { widgetRouter } from "./routes/widget.js";
+import uploadsRouter, { UPLOAD_DIR } from "./routes/uploads.js";
 import { createSocketServer } from "./socket/index.js";
 
 const app = express();
@@ -15,14 +14,14 @@ const io = createSocketServer(httpServer);
 
 app.use(cors({ origin: process.env.WEB_ORIGIN ?? "*" }));
 app.use(express.json({ limit: "2mb" }));
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.use("/api/auth", authRouter);
-app.use("/api/users", usersRouter);
-app.use("/api/keys", keysRouter);
-app.use("/api/messages", messagesRouter(io));
-app.use("/api/files", filesRouter);
+app.use("/api/agents", agentsRouter);
+app.use("/api/conversations", conversationsRouter(io));
+app.use("/api/widget", widgetRouter(io));
+app.use("/api/uploads", uploadsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

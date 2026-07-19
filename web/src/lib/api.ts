@@ -1,9 +1,5 @@
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:4000";
 
-function authHeaders(token: string | null): Record<string, string> {
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -12,134 +8,156 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export interface RegisterRequest {
-  username: string;
-  password: string;
-  registrationId: number;
-  identityPublicKey: string;
-  signedPreKeyId: number;
-  signedPreKeyPublic: string;
-  signedPreKeySignature: string;
-  preKeys: { keyId: number; publicKey: string }[];
+function agentHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
 }
 
-export interface AuthResponse {
-  token: string;
-  user: { id: string; username: string };
-}
+export type SenderType = "CUSTOMER" | "AGENT";
 
-export function register(payload: RegisterRequest): Promise<AuthResponse> {
-  return fetch(`${API_BASE}/api/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  }).then((r) => handle<AuthResponse>(r));
-}
-
-export function login(username: string, password: string): Promise<AuthResponse> {
-  return fetch(`${API_BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  }).then((r) => handle<AuthResponse>(r));
-}
-
-export function searchUsers(token: string, q: string): Promise<{ users: { id: string; username: string }[] }> {
-  return fetch(`${API_BASE}/api/users/search?q=${encodeURIComponent(q)}`, {
-    headers: authHeaders(token),
-  }).then((r) => handle(r));
-}
-
-export function fetchUserByUsername(token: string, username: string): Promise<{ user: { id: string; username: string } }> {
-  return fetch(`${API_BASE}/api/users/${encodeURIComponent(username)}`, {
-    headers: authHeaders(token),
-  }).then((r) => handle(r));
-}
-
-export interface RemoteKeyBundleResponse {
-  userId: string;
-  registrationId: number;
-  identityPublicKey: string;
-  signedPreKey: { keyId: number; publicKey: string; signature: string };
-  preKey: { keyId: number; publicKey: string } | null;
-}
-
-export function fetchKeyBundle(token: string, username: string): Promise<RemoteKeyBundleResponse> {
-  return fetch(`${API_BASE}/api/keys/${encodeURIComponent(username)}`, {
-    headers: authHeaders(token),
-  }).then((r) => handle(r));
-}
-
-export function topUpPreKeys(token: string, preKeys: { keyId: number; publicKey: string }[]): Promise<void> {
-  return fetch(`${API_BASE}/api/keys/prekeys`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ preKeys }),
-  }).then((r) => handle(r));
-}
-
-export function preKeyCount(token: string): Promise<{ count: number }> {
-  return fetch(`${API_BASE}/api/keys/prekeys/count`, { headers: authHeaders(token) }).then((r) => handle(r));
-}
-
-export interface WireMessage {
+export interface Message {
   id: string;
   conversationId: string;
-  senderId: string;
-  senderUsername: string;
-  cipherType: number;
-  ciphertext: string;
+  senderType: SenderType;
+  agentId: string | null;
+  text: string;
+  attachmentUrl: string | null;
+  attachmentName: string | null;
+  readByAgent: boolean;
+  readByVisitor: boolean;
   createdAt: string;
 }
 
-export function sendMessage(
-  token: string,
-  recipientUsername: string,
-  cipherType: number,
-  ciphertext: string
-): Promise<{ id: string; conversationId: string; delivered: boolean }> {
-  return fetch(`${API_BASE}/api/messages`, {
+export interface Conversation {
+  id: string;
+  visitorId: string;
+  visitorName: string | null;
+  visitorEmail: string | null;
+  status: "OPEN" | "CLOSED";
+  assignedAgentId?: string | null;
+  assignedAgent: { id: string; name: string } | null;
+  createdAt?: string;
+  updatedAt: string;
+  messages?: Message[];
+}
+
+export interface InboxConversation extends Conversation {
+  lastMessage: Message | null;
+  unreadCount: number;
+}
+
+// ---- Agent auth ----
+
+export interface AgentAuthResponse {
+  token: string;
+  agent: { id: string; name: string; email: string };
+}
+
+export function agentRegister(name: string, email: string, password: string): Promise<AgentAuthResponse> {
+  return fetch(`${API_BASE}/api/agents/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(token) },
-    body: JSON.stringify({ recipientUsername, cipherType, ciphertext }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, email, password }),
   }).then((r) => handle(r));
 }
 
-export function fetchConversationMessages(
-  token: string,
-  conversationId: string
-): Promise<{ messages: WireMessage[] }> {
-  return fetch(`${API_BASE}/api/messages/conversations/${encodeURIComponent(conversationId)}`, {
-    headers: authHeaders(token),
+export function agentLogin(email: string, password: string): Promise<AgentAuthResponse> {
+  return fetch(`${API_BASE}/api/agents/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   }).then((r) => handle(r));
 }
 
-export function fetchConversations(
-  token: string
-): Promise<{ conversations: { conversationId: string; lastMessageAt: string; otherUsername: string | null }[] }> {
-  return fetch(`${API_BASE}/api/messages/conversations`, { headers: authHeaders(token) }).then((r) => handle(r));
+// ---- Agent dashboard ----
+
+export function fetchInbox(token: string, status?: "OPEN" | "CLOSED"): Promise<{ conversations: InboxConversation[] }> {
+  const qs = status ? `?status=${status}` : "";
+  return fetch(`${API_BASE}/api/conversations${qs}`, { headers: agentHeaders(token) }).then((r) => handle(r));
 }
 
-export async function uploadEncryptedFile(
+export function fetchConversation(token: string, id: string): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/conversations/${id}`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function agentReply(
   token: string,
   conversationId: string,
-  blob: Blob
-): Promise<{ id: string; sizeBytes: number }> {
-  const form = new FormData();
-  form.append("conversationId", conversationId);
-  form.append("file", blob);
-  const res = await fetch(`${API_BASE}/api/files`, {
+  text: string,
+  attachment?: { url: string; name: string }
+): Promise<{ message: Message }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/messages`, {
     method: "POST",
-    headers: authHeaders(token),
-    body: form,
-  });
-  return handle(res);
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify({ text, attachmentUrl: attachment?.url, attachmentName: attachment?.name }),
+  }).then((r) => handle(r));
 }
 
-export async function downloadEncryptedFile(token: string, fileId: string): Promise<ArrayBuffer> {
-  const res = await fetch(`${API_BASE}/api/files/${encodeURIComponent(fileId)}`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error(`Download failed (${res.status})`);
-  return res.arrayBuffer();
+export function assignToMe(token: string, conversationId: string): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/assign`, {
+    method: "POST",
+    headers: agentHeaders(token),
+  }).then((r) => handle(r));
+}
+
+export function closeConversation(token: string, conversationId: string): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/close`, {
+    method: "POST",
+    headers: agentHeaders(token),
+  }).then((r) => handle(r));
+}
+
+export function reopenConversation(token: string, conversationId: string): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/reopen`, {
+    method: "POST",
+    headers: agentHeaders(token),
+  }).then((r) => handle(r));
+}
+
+// ---- Widget (anonymous visitor) ----
+
+export function fetchMyConversation(visitorId: string): Promise<{ conversation: Conversation | null }> {
+  return fetch(`${API_BASE}/api/widget/conversations/mine?visitorId=${encodeURIComponent(visitorId)}`).then((r) =>
+    handle(r)
+  );
+}
+
+export function startConversation(
+  visitorId: string,
+  text: string,
+  visitorName?: string,
+  visitorEmail?: string
+): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/widget/conversations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visitorId, text, visitorName, visitorEmail }),
+  }).then((r) => handle(r));
+}
+
+export function sendVisitorMessage(
+  conversationId: string,
+  visitorId: string,
+  text: string,
+  attachment?: { url: string; name: string }
+): Promise<{ message: Message }> {
+  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visitorId, text, attachmentUrl: attachment?.url, attachmentName: attachment?.name }),
+  }).then((r) => handle(r));
+}
+
+export function fetchVisitorMessages(conversationId: string, visitorId: string): Promise<{ messages: Message[] }> {
+  return fetch(
+    `${API_BASE}/api/widget/conversations/${conversationId}/messages?visitorId=${encodeURIComponent(visitorId)}`
+  ).then((r) => handle(r));
+}
+
+// ---- Uploads (shared) ----
+
+export async function uploadFile(file: Blob, filename: string): Promise<{ url: string; name: string }> {
+  const form = new FormData();
+  form.append("file", file, filename);
+  const res = await fetch(`${API_BASE}/api/uploads`, { method: "POST", body: form });
+  return handle(res);
 }

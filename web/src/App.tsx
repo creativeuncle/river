@@ -1,35 +1,26 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { DashboardPage } from "./pages/DashboardPage";
-import { LoginPage } from "./pages/LoginPage";
-import { RegisterPage } from "./pages/RegisterPage";
-import { ChatPage } from "./pages/ChatPage";
-import { useAuth } from "./store/AuthContext";
+import { DemoSitePage } from "./widget/DemoSitePage";
+import { AgentLoginPage } from "./agent/AgentLoginPage";
+import { AgentDashboardPage } from "./agent/AgentDashboardPage";
+import { useAgentAuth } from "./agent/AgentAuthContext";
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth();
-  if (!session) return <Navigate to="/login" replace />;
+function RequireAgent({ children }: { children: React.ReactNode }) {
+  const { session } = useAgentAuth();
+  if (!session) return <Navigate to="/agent/login" replace />;
   return <>{children}</>;
 }
 
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/" element={<DemoSitePage />} />
+      <Route path="/agent/login" element={<AgentLoginPage />} />
       <Route
-        path="/"
+        path="/agent"
         element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/chat/:username"
-        element={
-          <RequireAuth>
-            <ChatPage />
-          </RequireAuth>
+          <RequireAgent>
+            <AgentDashboardPage />
+          </RequireAgent>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />

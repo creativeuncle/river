@@ -1,35 +1,53 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
-import { verifyToken } from "../middleware/auth.js";
+import { verifyAgentToken } from "../middleware/auth.js";
+import { prisma } from "../prisma.js";
 
 export type IoServer = Server;
 
+// Two kinds of clients connect here: agents (authenticated with their JWT,
+// auto-joined to the shared "agents" room for inbox notifications) and
+// anonymous widget visitors (no login — they only ever ask to join the one
+// conversation room they own, proven by visitorId matching the DB row).
 export function createSocketServer(httpServer: HttpServer): IoServer {
   const io = new Server(httpServer, {
     cors: { origin: process.env.WEB_ORIGIN ?? "*" },
   });
 
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token as string | undefined;
-    if (!token) return next(new Error("Missing auth token"));
-    try {
-      const payload = verifyToken(token);
-      socket.data.userId = payload.userId;
-      socket.data.username = payload.username;
-      next();
-    } catch {
-      next(new Error("Invalid auth token"));
+    const token = socket.handshake.auth?.agentToken as string | undefined;
+    if (token) {
+      try {
+        socket.data.agent = verifyAgentToken(token);
+      } catch {
+        return next(new Error("Invalid agent token"));
+      }
     }
+    next();
   });
 
   io.on("connection", (socket) => {
-    const userId = socket.data.userId as string;
-    // Personal room: every device this user has connected receives relayed messages.
-    socket.join(`user:${userId}`);
+    if (socket.data.agent) {
+      socket.join("agents");
+    }
 
-    socket.on("typing", ({ toUserId }: { toUserId: string }) => {
-      if (typeof toUserId !== "string") return;
-      socket.to(`user:${toUserId}`).emit("typing", { fromUserId: userId });
+    socket.on("conversation:join", async ({ conversationId, visitorId }: { conversationId: string; visitorId?: string }) => {
+      if (typeof conversationId !== "string") return;
+
+      if (socket.data.agent) {
+        socket.join(`conversation:${conversationId}`);
+        return;
+      }
+      if (typeof visitorId !== "string") return;
+      const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
+      if (conversation?.visitorId === visitorId) {
+        socket.join(`conversation:${conversationId}`);
+      }
+    });
+
+    socket.on("typing", ({ conversationId, from }: { conversationId: string; from: "agent" | "customer" }) => {
+      if (typeof conversationId !== "string") return;
+      socket.to(`conversation:${conversationId}`).emit("typing", { conversationId, from });
     });
   });
 

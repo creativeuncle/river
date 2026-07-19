@@ -1,46 +1,62 @@
 # river
 
-A web-based, end-to-end encrypted chat app (Signal Protocol) built with Node.js — the foundation for a future iOS/Android/desktop client family.
+A web-based live chat support tool (Node.js + React) — a customer-facing chat widget plus an agent inbox dashboard, in the spirit of Intercom/Zendesk chat.
 
-## Security model
+Layout follows wireframe direction **1a** — bubble widget + inbox-style dashboard — from the imported Claude Design project.
 
-- **True E2E encryption** via the Signal Protocol (X3DH key agreement + Double Ratchet), using [`@privacyresearch/libsignal-protocol-typescript`](https://github.com/privacyresearchgroup/libsignal-protocol-typescript) in the browser.
-- Private identity keys, prekeys, and session state are generated and stored **only in the browser's IndexedDB** — they are never sent to the server.
-- The server only ever stores/relays **opaque ciphertext**: encrypted message envelopes and encrypted file blobs. It cannot decrypt chat content, even under compulsion or a breach.
-- File transfers: each file gets a fresh random AES-256-GCM key, generated client-side. The file ciphertext is uploaded to the server; the AES key itself is delivered to the recipient only inside a Signal-encrypted chat message. The server never sees the key, so it never sees file contents.
-- Passwords are hashed with bcrypt for account login — this is separate from (and does not weaken) the E2E identity keys.
+## What it is
+
+- **Customer widget**: a floating chat bubble that can be embedded on any website. Anonymous visitors (no account needed) can open it and start chatting; their identity is a random id kept in their browser.
+- **Agent dashboard**: staff log in, see a live inbox of conversations, open a thread, reply, assign conversations to themselves, and close/reopen them.
+- Real-time delivery both ways over Socket.io, with everything persisted in Postgres so history survives reloads/reconnects.
+- File/image/document attachments (customer → agent and agent → customer).
+
+## Security model (different from a personal E2E chat app)
+
+This is a **support chat tool**, not a personal encrypted messenger — agents fundamentally need to read, search, and act on conversation content, so true end-to-end encryption (where even the server can't read messages) doesn't fit the product. Instead:
+
+- All traffic should run over TLS in production (terminate HTTPS at your load balancer/reverse proxy).
+- Agent passwords are hashed with bcrypt.
+- A visitor's only credential is a random id generated client-side; a conversation can only be read/written by the matching visitorId or an authenticated agent.
+- Attachments are stored on disk behind random, unguessable filenames.
 
 ## Stack
 
-- **Backend**: Node.js, TypeScript, Express, Socket.io (real-time relay), PostgreSQL + Prisma
-- **Frontend**: React + TypeScript + Vite, Socket.io client, Signal Protocol client library, Web Crypto API (AES-GCM) for files
-- Everything used is free/open-source. No paid service is required to develop or self-host.
+- **Backend**: Node.js, TypeScript, Express, Socket.io, PostgreSQL + Prisma
+- **Frontend**: React + TypeScript + Vite, Socket.io client
+- Everything used is free/open-source.
 
 ## Project layout
 
 ```
-server/   Express + Socket.io API, Prisma schema, auth, key exchange, message relay, file storage
-web/      React SPA: register/login, username search, chat UI, client-side crypto
+server/   Express + Socket.io API: agent auth, widget endpoints, agent/inbox endpoints, Prisma schema
+web/      React SPA:
+  src/widget/   the embeddable customer chat bubble + demo storefront page it sits on
+  src/agent/    agent login + dashboard (inbox list, conversation thread, customer info panel)
 ```
 
 ## Running locally
 
 ### Option A: Docker Compose (easiest — no local Node/Postgres install needed)
 
-Just install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then:
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then:
 
 ```bash
 docker compose up
 ```
 
-This starts Postgres, runs the migrations, and starts both the backend (`:4000`) and frontend (`:5173`). Open `http://localhost:5173`.
+This starts Postgres, runs migrations, and starts both the backend (`:4000`) and frontend (`:5173`).
+
+- `http://localhost:5173/` — demo storefront with the chat widget (customer side)
+- `http://localhost:5173/agent/login` — agent dashboard login/register
+
+> If you already run Postgres locally on port 5432, this project's compose file maps its own Postgres to host port `5433` to avoid conflicting — no changes needed on your end.
 
 ### Option B: Run natively
 
 #### 1. Database
 
 ```bash
-# requires a running PostgreSQL instance
 createuser river --pwprompt
 createdb river -O river
 ```
@@ -63,23 +79,17 @@ npm install
 npm run dev              # listens on :5173
 ```
 
-Open two browser sessions (or profiles), register two different usernames, search for one from the other, and start chatting.
+## Trying it out
 
-## What's implemented
+1. Open `http://localhost:5173/` in one tab — click the chat bubble bottom-right and send a message as a customer.
+2. Open `http://localhost:5173/agent/login` in another tab (or incognito) — register an agent account, and the new conversation appears live in the inbox.
+3. Reply from the dashboard — it shows up instantly in the customer's widget, and vice versa. Try sending a file attachment from either side, and closing the conversation from the customer info panel.
 
-- Username-based registration/login (JWT sessions)
-- Signal Protocol identity generation, prekey publishing/consumption, and X3DH session establishment
-- Real-time encrypted messaging over Socket.io, with offline delivery fallback (messages persist encrypted and are fetched on reconnect)
-- Encrypted file/image/video/document transfer (no file-type allowlist needed server-side — content is opaque ciphertext regardless of original format: zip, pdf, psd, ai, eps, svg, images, video, etc.)
+## What's next
 
-## Known limitations / what's next
-
-This is a foundation, not a finished product. Before any real users touch it:
-
-- **Identity verification UI**: Signal's "safety numbers" (fingerprint comparison) aren't exposed yet — currently trust-on-first-use only, so a MITM on first contact wouldn't be caught by a user.
-- **Multi-device**: one Signal identity per username right now; Signal's real multi-device story (linked devices) is more involved.
-- **Groups**: 1:1 chat only so far.
-- **Push notifications, read receipts, typing indicators (UI), message deletion/expiry**: not built yet.
-- **Production hosting**: needs TLS termination, object storage (S3-compatible) instead of local disk for files at scale, and a managed Postgres instance.
-- **Rate limiting / abuse prevention** on auth and upload endpoints isn't in place yet.
-- Mobile (iOS/Android) and desktop (Windows/macOS) clients would reuse the same backend and Signal Protocol approach, via native libsignal bindings or React Native.
+- Canned/quick replies, typing-while-offline queueing
+- Multiple agents + conversation routing/assignment rules
+- Visitor pre-chat form (name/email capture) shown in the wireframe
+- Read receipts in the inbox list, sound/desktop notifications for agents
+- Production hosting: TLS termination, S3-compatible storage for attachments instead of local disk, managed Postgres
+- Rate limiting / abuse prevention on the public widget endpoints

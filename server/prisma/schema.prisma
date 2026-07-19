@@ -7,69 +7,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// A user's account + Signal Protocol public key material.
-// Only public keys ever live here — private keys never leave the client.
-model User {
+// A support staff member who logs into the agent dashboard.
+model Agent {
   id           String   @id @default(uuid())
-  username     String   @unique
+  name         String
+  email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
 
-  // Signal Protocol identity
-  registrationId      Int
-  identityPublicKey   String // base64
-  signedPreKeyId      Int
-  signedPreKeyPublic  String // base64
-  signedPreKeySignature String // base64
-
-  preKeys       PreKey[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-  files         FileBlob[]
+  conversations Conversation[]
+  messages      Message[]
 }
 
-// One-time prekeys, consumed on first session establishment (X3DH).
-model PreKey {
-  id        String  @id @default(uuid())
-  userId    String
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  keyId     Int
-  publicKey String // base64
-  used      Boolean @default(false)
-  createdAt DateTime @default(now())
-
-  @@unique([userId, keyId])
-  @@index([userId, used])
+enum ConversationStatus {
+  OPEN
+  CLOSED
 }
 
-// Opaque encrypted message envelope. The server can read none of this
-// beyond routing metadata (sender/recipient/timestamp).
+// One customer's chat thread, started anonymously from the widget.
+// A visitor is identified only by a client-generated id (stored in
+// their browser's localStorage) — no account/login required to chat.
+model Conversation {
+  id         String             @id @default(uuid())
+  visitorId  String
+  visitorName  String?
+  visitorEmail String?
+  status     ConversationStatus @default(OPEN)
+  assignedAgentId String?
+  assignedAgent   Agent?         @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  messages Message[]
+
+  @@index([visitorId])
+  @@index([status, updatedAt])
+}
+
+enum SenderType {
+  CUSTOMER
+  AGENT
+}
+
 model Message {
-  id             String   @id @default(uuid())
+  id             String       @id @default(uuid())
   conversationId String
-  senderId       String
-  sender         User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  recipientId    String
-  recipient      User     @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
-  cipherType     Int      // 1 = WhisperMessage, 3 = PreKeyWhisperMessage (libsignal message types)
-  ciphertext     String   // base64 opaque blob
-  delivered      Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType     SenderType
+  agentId        String?
+  agent          Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  text           String
+  attachmentUrl  String?
+  attachmentName String?
+  readByAgent    Boolean      @default(false)
+  readByVisitor  Boolean      @default(false)
+  createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
-  @@index([recipientId, delivered])
-}
-
-// Encrypted file blob stored on disk. The AES key that decrypts it is
-// itself only ever transmitted inside an encrypted Message payload.
-model FileBlob {
-  id             String   @id @default(uuid())
-  conversationId String
-  ownerId        String
-  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  storagePath    String
-  sizeBytes      Int
-  createdAt      DateTime @default(now())
-
-  @@index([conversationId])
 }
