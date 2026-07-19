@@ -27,6 +27,7 @@ export function AgentDashboardPage() {
 
   const [scope, setScope] = useState<ScopeFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [sidebarExpanded, setSidebarExpanded] = useState(() => localStorage.getItem("river:sidebarExpanded") === "1");
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [agents, setAgents] = useState<{ id: string; name: string; email: string }[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
@@ -137,10 +138,17 @@ export function AgentDashboardPage() {
     setNotesByConversation((prev) => ({ ...prev, [selected.id]: [note, ...(prev[selected.id] ?? [])] }));
   }
 
+  function toggleSidebar() {
+    setSidebarExpanded((prev) => {
+      localStorage.setItem("river:sidebarExpanded", prev ? "0" : "1");
+      return !prev;
+    });
+  }
+
   if (!session) return null;
 
   return (
-    <div className="agent-dashboard">
+    <div className={`agent-dashboard ${sidebarExpanded ? "" : "sidebar-collapsed"}`}>
       <Sidebar
         conversations={conversations}
         agents={agents}
@@ -148,6 +156,8 @@ export function AgentDashboardPage() {
         currentAgentName={session.name}
         scope={scope}
         status={status}
+        expanded={sidebarExpanded}
+        onToggleExpanded={toggleSidebar}
         onScopeChange={setScope}
         onStatusChange={setStatus}
         onLogout={logout}

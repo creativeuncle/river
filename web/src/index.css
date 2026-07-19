@@ -472,6 +472,11 @@ input {
   display: grid;
   grid-template-columns: 240px 260px 1fr 260px;
   background: var(--bg);
+  transition: grid-template-columns 0.15s ease;
+}
+
+.agent-dashboard.sidebar-collapsed {
+  grid-template-columns: 56px 260px 1fr 260px;
 }
 
 /* Sidebar */
@@ -481,6 +486,45 @@ input {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+}
+
+.sidebar-top-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Collapsed icon-only rail */
+.sidebar.collapsed {
+  width: 56px;
+  align-items: center;
+  padding: 10px 0;
+  gap: 2px;
+  overflow: visible;
+}
+
+.rail-toggle {
+  margin-bottom: 6px;
+}
+
+.rail-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+}
+
+.rail-icon.active {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
+.rail-spacer {
+  flex: 1;
 }
 
 .sidebar-search {
@@ -509,18 +553,6 @@ input {
 
 .sidebar-search .search-box input:focus {
   outline: none;
-}
-
-.sidebar-nav-icons {
-  display: flex;
-  gap: 4px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.sidebar-nav-icons .icon-btn.active {
-  background: var(--surface-hover);
-  color: var(--accent);
 }
 
 .sidebar-section {

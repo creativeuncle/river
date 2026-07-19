@@ -1,12 +1,19 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   SearchIcon,
-  Bookmark01Icon,
+  Flag01Icon,
   Home01Icon,
+  MonitorDotIcon,
+  RightTriangleIcon,
+  ClipboardListIcon,
   Chat01Icon,
+  Share08Icon,
+  UserGroupIcon,
+  Setting06Icon,
+  HelpCircleIcon,
+  SidebarLeft01Icon,
   InboxIcon,
   Tag01Icon,
-  UserGroupIcon,
   Logout01Icon,
 } from "@hugeicons/core-free-icons";
 import type { InboxConversation } from "../lib/api";
@@ -16,6 +23,24 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 export type ScopeFilter = "all" | "mine" | "unassigned";
 export type StatusFilter = "ALL" | "OPEN" | "CLOSED";
 
+// Icons above "Conversations" stand in for sections this build doesn't have
+// yet (reports, automations, integrations, team) — they're decorative nav
+// placeholders for now, matching the reference's icon rail. Conversations
+// is the one real, functional section, so it's the one shown active.
+const PLACEHOLDER_NAV = [
+  { icon: SearchIcon, label: "Search" },
+  { icon: Flag01Icon, label: "Saved" },
+  { icon: Home01Icon, label: "Home" },
+  { icon: MonitorDotIcon, label: "Channels" },
+  { icon: RightTriangleIcon, label: "Reports" },
+  { icon: ClipboardListIcon, label: "Automations" },
+];
+
+const PLACEHOLDER_NAV_BOTTOM = [
+  { icon: Share08Icon, label: "Integrations" },
+  { icon: UserGroupIcon, label: "Team" },
+];
+
 export function Sidebar({
   conversations,
   agents,
@@ -23,6 +48,8 @@ export function Sidebar({
   currentAgentName,
   scope,
   status,
+  expanded,
+  onToggleExpanded,
   onScopeChange,
   onStatusChange,
   onLogout,
@@ -33,6 +60,8 @@ export function Sidebar({
   currentAgentName: string;
   scope: ScopeFilter;
   status: StatusFilter;
+  expanded: boolean;
+  onToggleExpanded: () => void;
   onScopeChange: (s: ScopeFilter) => void;
   onStatusChange: (s: StatusFilter) => void;
   onLogout: () => void;
@@ -45,27 +74,51 @@ export function Sidebar({
     closed: conversations.filter((c) => c.status === "CLOSED").length,
   };
 
+  if (!expanded) {
+    return (
+      <nav className="sidebar collapsed">
+        <button className="icon-btn rail-toggle" title="Expand sidebar" onClick={onToggleExpanded}>
+          <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+        </button>
+        {PLACEHOLDER_NAV.map(({ icon, label }) => (
+          <button key={label} className="icon-btn rail-icon" title={label}>
+            <HugeiconsIcon icon={icon} size={18} />
+          </button>
+        ))}
+        <button className="icon-btn rail-icon active" title="Conversations">
+          <HugeiconsIcon icon={Chat01Icon} size={18} />
+        </button>
+        {PLACEHOLDER_NAV_BOTTOM.map(({ icon, label }) => (
+          <button key={label} className="icon-btn rail-icon" title={label}>
+            <HugeiconsIcon icon={icon} size={18} />
+          </button>
+        ))}
+        <div className="rail-spacer" />
+        <button className="icon-btn rail-icon" title="Settings">
+          <HugeiconsIcon icon={Setting06Icon} size={18} />
+        </button>
+        <button className="icon-btn rail-icon" title="Help">
+          <HugeiconsIcon icon={HelpCircleIcon} size={18} />
+        </button>
+      </nav>
+    );
+  }
+
   return (
     <nav className="sidebar">
+      <div className="sidebar-top-row">
+        <button className="icon-btn" title="Collapse sidebar" onClick={onToggleExpanded}>
+          <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
+        </button>
+        <div style={{ flex: 1 }} />
+        <ThemeToggle />
+      </div>
+
       <div className="sidebar-search">
         <div className="search-box">
           <HugeiconsIcon icon={SearchIcon} size={16} />
           <input placeholder="Search chat" />
         </div>
-      </div>
-
-      <div className="sidebar-nav-icons">
-        <button className="icon-btn active" title="Conversations">
-          <HugeiconsIcon icon={Chat01Icon} size={18} />
-        </button>
-        <button className="icon-btn" title="Home">
-          <HugeiconsIcon icon={Home01Icon} size={18} />
-        </button>
-        <button className="icon-btn" title="Saved">
-          <HugeiconsIcon icon={Bookmark01Icon} size={18} />
-        </button>
-        <div style={{ flex: 1 }} />
-        <ThemeToggle />
       </div>
 
       <div className="sidebar-section">
