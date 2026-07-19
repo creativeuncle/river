@@ -13,6 +13,8 @@ model Agent {
   name         String
   email        String   @unique
   passwordHash String
+  title        String?
+  role         String   @default("Agent")
   createdAt    DateTime @default(now())
 
   conversations Conversation[]

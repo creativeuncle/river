@@ -16,18 +16,19 @@ import {
   Tag01Icon,
   Logout01Icon,
 } from "@hugeicons/core-free-icons";
-import type { InboxConversation } from "../lib/api";
+import type { Agent, InboxConversation } from "../lib/api";
 import { initials } from "../lib/avatar";
 import { ThemeToggle } from "../theme/ThemeToggle";
 
 export type ScopeFilter = "all" | "mine" | "unassigned";
 export type StatusFilter = "ALL" | "OPEN" | "CLOSED";
+export type SidebarSection = "conversations" | "team";
 
-// Icons above "Conversations" stand in for sections this build doesn't have
-// yet (reports, automations, integrations, team) — they're decorative nav
-// placeholders for now, matching the reference's icon rail. Conversations
-// is the one real, functional section, so it's the one shown active.
-const PLACEHOLDER_NAV = [
+// Icons in between stand in for sections this build doesn't have yet
+// (reports, automations, integrations) — decorative nav placeholders
+// matching the reference's icon rail. Conversations and Team are the two
+// real, functional sections and are wired to actual navigation.
+const PLACEHOLDER_NAV_TOP = [
   { icon: SearchIcon, label: "Search" },
   { icon: Flag01Icon, label: "Saved" },
   { icon: Home01Icon, label: "Home" },
@@ -36,10 +37,7 @@ const PLACEHOLDER_NAV = [
   { icon: ClipboardListIcon, label: "Automations" },
 ];
 
-const PLACEHOLDER_NAV_BOTTOM = [
-  { icon: Share08Icon, label: "Integrations" },
-  { icon: UserGroupIcon, label: "Team" },
-];
+const PLACEHOLDER_NAV_BOTTOM = [{ icon: Share08Icon, label: "Integrations" }];
 
 export function Sidebar({
   conversations,
@@ -49,19 +47,25 @@ export function Sidebar({
   scope,
   status,
   expanded,
+  activeSection,
   onToggleExpanded,
+  onNavigateConversations,
+  onNavigateTeam,
   onScopeChange,
   onStatusChange,
   onLogout,
 }: {
   conversations: InboxConversation[];
-  agents: { id: string; name: string; email: string }[];
+  agents: Agent[];
   currentAgentId: string;
   currentAgentName: string;
   scope: ScopeFilter;
   status: StatusFilter;
   expanded: boolean;
+  activeSection: SidebarSection;
   onToggleExpanded: () => void;
+  onNavigateConversations: () => void;
+  onNavigateTeam: () => void;
   onScopeChange: (s: ScopeFilter) => void;
   onStatusChange: (s: StatusFilter) => void;
   onLogout: () => void;
@@ -80,12 +84,16 @@ export function Sidebar({
         <button className="icon-btn rail-toggle" title="Expand sidebar" onClick={onToggleExpanded}>
           <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
         </button>
-        {PLACEHOLDER_NAV.map(({ icon, label }) => (
+        {PLACEHOLDER_NAV_TOP.map(({ icon, label }) => (
           <button key={label} className="icon-btn rail-icon" title={label}>
             <HugeiconsIcon icon={icon} size={18} />
           </button>
         ))}
-        <button className="icon-btn rail-icon active" title="Conversations">
+        <button
+          className={`icon-btn rail-icon ${activeSection === "conversations" ? "active" : ""}`}
+          title="Conversations"
+          onClick={onNavigateConversations}
+        >
           <HugeiconsIcon icon={Chat01Icon} size={18} />
         </button>
         {PLACEHOLDER_NAV_BOTTOM.map(({ icon, label }) => (
@@ -93,6 +101,13 @@ export function Sidebar({
             <HugeiconsIcon icon={icon} size={18} />
           </button>
         ))}
+        <button
+          className={`icon-btn rail-icon ${activeSection === "team" ? "active" : ""}`}
+          title="Team"
+          onClick={onNavigateTeam}
+        >
+          <HugeiconsIcon icon={UserGroupIcon} size={18} />
+        </button>
         <div className="rail-spacer" />
         <button className="icon-btn rail-icon" title="Settings">
           <HugeiconsIcon icon={Setting06Icon} size={18} />
@@ -122,61 +137,83 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-section-title">Inbox</div>
-        <button className={`sidebar-row ${scope === "all" ? "active" : ""}`} onClick={() => onScopeChange("all")}>
-          <span className="row-icon">
-            <HugeiconsIcon icon={InboxIcon} size={15} />
-          </span>
-          <span className="row-label">All</span>
-          <span className="row-count">{counts.all}</span>
-        </button>
-        <button className={`sidebar-row ${scope === "mine" ? "active" : ""}`} onClick={() => onScopeChange("mine")}>
-          <span className="status-dot agent" />
-          <span className="row-label">Assigned to me</span>
-          <span className="row-count">{counts.mine}</span>
-        </button>
         <button
-          className={`sidebar-row ${scope === "unassigned" ? "active" : ""}`}
-          onClick={() => onScopeChange("unassigned")}
+          className={`sidebar-row ${activeSection === "conversations" ? "active" : ""}`}
+          onClick={onNavigateConversations}
         >
-          <span className="status-dot paused" />
-          <span className="row-label">Unassigned</span>
-          <span className="row-count">{counts.unassigned}</span>
+          <span className="row-icon">
+            <HugeiconsIcon icon={Chat01Icon} size={15} />
+          </span>
+          <span className="row-label">Conversations</span>
+        </button>
+        <button className={`sidebar-row ${activeSection === "team" ? "active" : ""}`} onClick={onNavigateTeam}>
+          <span className="row-icon">
+            <HugeiconsIcon icon={UserGroupIcon} size={15} />
+          </span>
+          <span className="row-label">Team</span>
         </button>
       </div>
 
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">Status</div>
-        <button className={`sidebar-row ${status === "ALL" ? "active" : ""}`} onClick={() => onStatusChange("ALL")}>
-          <span className="status-dot all" />
-          <span className="row-label">All</span>
-          <span className="row-count">{counts.all}</span>
-        </button>
-        <button className={`sidebar-row ${status === "OPEN" ? "active" : ""}`} onClick={() => onStatusChange("OPEN")}>
-          <span className="status-dot agent" />
-          <span className="row-label">Open</span>
-          <span className="row-count">{counts.open}</span>
-        </button>
-        <button
-          className={`sidebar-row ${status === "CLOSED" ? "active" : ""}`}
-          onClick={() => onStatusChange("CLOSED")}
-        >
-          <span className="status-dot paused" />
-          <span className="row-label">Closed</span>
-          <span className="row-count">{counts.closed}</span>
-        </button>
-      </div>
+      {activeSection === "conversations" && (
+        <>
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Inbox</div>
+            <button className={`sidebar-row ${scope === "all" ? "active" : ""}`} onClick={() => onScopeChange("all")}>
+              <span className="row-icon">
+                <HugeiconsIcon icon={InboxIcon} size={15} />
+              </span>
+              <span className="row-label">All</span>
+              <span className="row-count">{counts.all}</span>
+            </button>
+            <button className={`sidebar-row ${scope === "mine" ? "active" : ""}`} onClick={() => onScopeChange("mine")}>
+              <span className="status-dot agent" />
+              <span className="row-label">Assigned to me</span>
+              <span className="row-count">{counts.mine}</span>
+            </button>
+            <button
+              className={`sidebar-row ${scope === "unassigned" ? "active" : ""}`}
+              onClick={() => onScopeChange("unassigned")}
+            >
+              <span className="status-dot paused" />
+              <span className="row-label">Unassigned</span>
+              <span className="row-count">{counts.unassigned}</span>
+            </button>
+          </div>
 
-      <div className="sidebar-section">
-        <div className="sidebar-section-title">Channel</div>
-        <button className="sidebar-row active">
-          <span className="row-icon">
-            <HugeiconsIcon icon={Tag01Icon} size={15} />
-          </span>
-          <span className="row-label">Web widget</span>
-          <span className="row-count">{counts.all}</span>
-        </button>
-      </div>
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Status</div>
+            <button className={`sidebar-row ${status === "ALL" ? "active" : ""}`} onClick={() => onStatusChange("ALL")}>
+              <span className="status-dot all" />
+              <span className="row-label">All</span>
+              <span className="row-count">{counts.all}</span>
+            </button>
+            <button className={`sidebar-row ${status === "OPEN" ? "active" : ""}`} onClick={() => onStatusChange("OPEN")}>
+              <span className="status-dot agent" />
+              <span className="row-label">Open</span>
+              <span className="row-count">{counts.open}</span>
+            </button>
+            <button
+              className={`sidebar-row ${status === "CLOSED" ? "active" : ""}`}
+              onClick={() => onStatusChange("CLOSED")}
+            >
+              <span className="status-dot paused" />
+              <span className="row-label">Closed</span>
+              <span className="row-count">{counts.closed}</span>
+            </button>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-section-title">Channel</div>
+            <button className="sidebar-row active">
+              <span className="row-icon">
+                <HugeiconsIcon icon={Tag01Icon} size={15} />
+              </span>
+              <span className="row-label">Web widget</span>
+              <span className="row-count">{counts.all}</span>
+            </button>
+          </div>
+        </>
+      )}
 
       <div className="sidebar-section sidebar-agents">
         <div className="sidebar-section-title">

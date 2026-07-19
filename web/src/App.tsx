@@ -1,7 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { DemoSitePage } from "./widget/DemoSitePage";
 import { AgentLoginPage } from "./agent/AgentLoginPage";
+import { AgentLayout } from "./agent/AgentLayout";
 import { AgentDashboardPage } from "./agent/AgentDashboardPage";
+import { TeamPage } from "./agent/TeamPage";
 import { useAgentAuth } from "./agent/AgentAuthContext";
 
 function RequireAgent({ children }: { children: React.ReactNode }) {
@@ -19,10 +21,13 @@ function App() {
         path="/agent"
         element={
           <RequireAgent>
-            <AgentDashboardPage />
+            <AgentLayout />
           </RequireAgent>
         }
-      />
+      >
+        <Route index element={<AgentDashboardPage />} />
+        <Route path="team" element={<TeamPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

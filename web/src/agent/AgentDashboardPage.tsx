@@ -1,68 +1,44 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Socket } from "socket.io-client";
+import { useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import {
   agentReply,
   assignToMe,
   closeConversation,
-  fetchAgents,
   fetchConversation,
-  fetchInbox,
   reopenConversation,
   uploadFile,
   type Conversation,
-  type InboxConversation,
   type Message,
 } from "../lib/api";
-import { createSocket } from "../lib/socket";
 import { appendMessage } from "../lib/messages";
 import { useAgentAuth } from "./AgentAuthContext";
-import { Sidebar, type ScopeFilter, type StatusFilter } from "./Sidebar";
+import type { AgentOutletContext } from "./AgentLayout";
 import { InboxList } from "./InboxList";
 import { ConversationThread } from "./ConversationThread";
 import { CustomerInfoPanel, type Note } from "./CustomerInfoPanel";
 
 export function AgentDashboardPage() {
-  const { session, logout } = useAgentAuth();
-  const socketRef = useRef<Socket | null>(null);
+  const { session } = useAgentAuth();
+  const { socket, conversations, refreshInbox, scope, status } = useOutletContext<AgentOutletContext>();
 
-  const [scope, setScope] = useState<ScopeFilter>("all");
-  const [status, setStatus] = useState<StatusFilter>("ALL");
-  const [sidebarExpanded, setSidebarExpanded] = useState(() => localStorage.getItem("river:sidebarExpanded") === "1");
-  const [conversations, setConversations] = useState<InboxConversation[]>([]);
-  const [agents, setAgents] = useState<{ id: string; name: string; email: string }[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [visitorTyping, setVisitorTyping] = useState(false);
   const [notesByConversation, setNotesByConversation] = useState<Record<string, Note[]>>({});
 
-  const refreshInbox = useCallback(() => {
-    if (!session) return;
-    fetchInbox(session.token).then((r) => setConversations(r.conversations));
-  }, [session]);
-
   useEffect(() => {
-    refreshInbox();
-    if (session) fetchAgents(session.token).then((r) => setAgents(r.agents));
-  }, [refreshInbox, session]);
+    if (!socket) return;
 
-  useEffect(() => {
-    if (!session) return;
-    const socket = createSocket(session.token);
-    socketRef.current = socket;
-
-    socket.on("conversation:new", refreshInbox);
-    socket.on("conversation:updated", refreshInbox);
-
-    socket.on("message:new", (m: Message) => {
+    const onMessage = (m: Message) => {
       setSelected((prev) => {
         if (prev && m.conversationId === prev.id) {
           setMessages((prevMsgs) => appendMessage(prevMsgs, m));
         }
         return prev;
       });
-    });
+    };
 
-    socket.on("typing", ({ conversationId, from }: { conversationId: string; from: string }) => {
+    const onTypingEvent = ({ conversationId, from }: { conversationId: string; from: string }) => {
       setSelected((prev) => {
         if (prev && prev.id === conversationId && from === "customer") {
           setVisitorTyping(true);
@@ -70,12 +46,15 @@ export function AgentDashboardPage() {
         }
         return prev;
       });
-    });
-
-    return () => {
-      socket.disconnect();
     };
-  }, [session, refreshInbox]);
+
+    socket.on("message:new", onMessage);
+    socket.on("typing", onTypingEvent);
+    return () => {
+      socket.off("message:new", onMessage);
+      socket.off("typing", onTypingEvent);
+    };
+  }, [socket]);
 
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
@@ -93,7 +72,7 @@ export function AgentDashboardPage() {
     const { conversation } = await fetchConversation(session.token, id);
     setSelected(conversation);
     setMessages(conversation.messages ?? []);
-    socketRef.current?.emit("conversation:join", { conversationId: id });
+    socket?.emit("conversation:join", { conversationId: id });
     refreshInbox();
   }
 
@@ -112,7 +91,7 @@ export function AgentDashboardPage() {
 
   function onTyping() {
     if (!selected) return;
-    socketRef.current?.emit("typing", { conversationId: selected.id, from: "agent" });
+    socket?.emit("typing", { conversationId: selected.id, from: "agent" });
   }
 
   async function onAssignToMe() {
@@ -138,31 +117,10 @@ export function AgentDashboardPage() {
     setNotesByConversation((prev) => ({ ...prev, [selected.id]: [note, ...(prev[selected.id] ?? [])] }));
   }
 
-  function toggleSidebar() {
-    setSidebarExpanded((prev) => {
-      localStorage.setItem("river:sidebarExpanded", prev ? "0" : "1");
-      return !prev;
-    });
-  }
-
   if (!session) return null;
 
   return (
-    <div className={`agent-dashboard ${sidebarExpanded ? "" : "sidebar-collapsed"}`}>
-      <Sidebar
-        conversations={conversations}
-        agents={agents}
-        currentAgentId={session.agentId}
-        currentAgentName={session.name}
-        scope={scope}
-        status={status}
-        expanded={sidebarExpanded}
-        onToggleExpanded={toggleSidebar}
-        onScopeChange={setScope}
-        onStatusChange={setStatus}
-        onLogout={logout}
-      />
-
+    <div className="dashboard-columns">
       <InboxList
         title={listTitle}
         conversations={filteredConversations}

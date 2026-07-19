@@ -70,8 +70,48 @@ export function agentLogin(email: string, password: string): Promise<AgentAuthRe
 
 // ---- Agent dashboard ----
 
-export function fetchAgents(token: string): Promise<{ agents: { id: string; name: string; email: string }[] }> {
+export interface Agent {
+  id: string;
+  name: string;
+  email: string;
+  title: string | null;
+  role: string;
+  createdAt: string;
+}
+
+export function fetchAgents(token: string): Promise<{ agents: Agent[] }> {
   return fetch(`${API_BASE}/api/agents`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function createAgent(
+  token: string,
+  data: { name: string; email: string; password: string; title?: string }
+): Promise<{ agent: Agent }> {
+  return fetch(`${API_BASE}/api/agents`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export function updateAgent(
+  token: string,
+  id: string,
+  data: { name?: string; title?: string | null; role?: string }
+): Promise<{ agent: Agent }> {
+  return fetch(`${API_BASE}/api/agents/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export async function deleteAgent(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/agents/${id}`, { method: "DELETE", headers: agentHeaders(token) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
 }
 
 export function fetchInbox(token: string, status?: "OPEN" | "CLOSED"): Promise<{ conversations: InboxConversation[] }> {
