@@ -2,9 +2,18 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { signAgentToken } from "../middleware/auth.js";
+import { requireAgent, signAgentToken } from "../middleware/auth.js";
 
 const router = Router();
+
+// The sidebar's Agents list — any logged-in agent can see their teammates.
+router.get("/", requireAgent, async (_req, res) => {
+  const agents = await prisma.agent.findMany({
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+  res.json({ agents });
+});
 
 const registerSchema = z.object({
   name: z.string().min(1).max(80),

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { agentLogin, agentRegister } from "../lib/api";
 import { useAgentAuth } from "./AgentAuthContext";
+import { ThemeToggle } from "../theme/ThemeToggle";
 
 export function AgentLoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -30,6 +31,9 @@ export function AgentLoginPage() {
 
   return (
     <div className="auth-page">
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <ThemeToggle />
+      </div>
       <h1>river</h1>
       <p className="tagline">Agent dashboard</p>
       <form onSubmit={onSubmit}>

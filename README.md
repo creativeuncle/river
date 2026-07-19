@@ -23,7 +23,8 @@ This is a **support chat tool**, not a personal encrypted messenger — agents f
 ## Stack
 
 - **Backend**: Node.js, TypeScript, Express, Socket.io, PostgreSQL + Prisma
-- **Frontend**: React + TypeScript + Vite, Socket.io client
+- **Frontend**: React + TypeScript + Vite, Socket.io client, [Hugeicons](https://hugeicons.com/) icon set
+- Light/dark theme toggle (persisted per browser), matching an Intercom-style reference design
 - Everything used is free/open-source.
 
 ## Project layout

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Socket } from "socket.io-client";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Attachment01Icon, SentIcon } from "@hugeicons/core-free-icons";
 import {
   fetchMyConversation,
   fetchVisitorMessages,
@@ -151,28 +153,31 @@ export function ChatWidget() {
         <p className="muted widget-closed-note">This conversation has been closed.</p>
       ) : (
         <form className="composer" onSubmit={onSubmit}>
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={onPickFile}
-            accept="image/*,video/*,.zip,.pdf,.psd,.ai,.eps,.svg"
-          />
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending}>
-            📎
-          </button>
-          <input
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              onTyping();
-            }}
-            placeholder="Type a message…"
-            disabled={sending}
-          />
-          <button type="submit" disabled={sending || !text.trim()}>
-            Send
-          </button>
+          <div className="composer-row">
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              onChange={onPickFile}
+              accept="image/*,video/*,.zip,.pdf,.psd,.ai,.eps,.svg"
+            />
+            <button type="button" className="icon-btn" onClick={() => fileInputRef.current?.click()} disabled={sending}>
+              <HugeiconsIcon icon={Attachment01Icon} size={17} />
+            </button>
+            <input
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                onTyping();
+              }}
+              placeholder="Type a message…"
+              disabled={sending}
+            />
+            <button type="submit" className="send-btn" disabled={sending || !text.trim()}>
+              <HugeiconsIcon icon={SentIcon} size={14} />
+              Send
+            </button>
+          </div>
         </form>
       )}
     </div>

@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import {
   agentReply,
   assignToMe,
   closeConversation,
+  fetchAgents,
   fetchConversation,
   fetchInbox,
   reopenConversation,
+  uploadFile,
   type Conversation,
   type InboxConversation,
   type Message,
@@ -14,28 +16,33 @@ import {
 import { createSocket } from "../lib/socket";
 import { appendMessage } from "../lib/messages";
 import { useAgentAuth } from "./AgentAuthContext";
+import { Sidebar, type ScopeFilter, type StatusFilter } from "./Sidebar";
 import { InboxList } from "./InboxList";
 import { ConversationThread } from "./ConversationThread";
-import { CustomerInfoPanel } from "./CustomerInfoPanel";
+import { CustomerInfoPanel, type Note } from "./CustomerInfoPanel";
 
 export function AgentDashboardPage() {
   const { session, logout } = useAgentAuth();
   const socketRef = useRef<Socket | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<"OPEN" | "CLOSED">("OPEN");
+  const [scope, setScope] = useState<ScopeFilter>("all");
+  const [status, setStatus] = useState<StatusFilter>("ALL");
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
+  const [agents, setAgents] = useState<{ id: string; name: string; email: string }[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [visitorTyping, setVisitorTyping] = useState(false);
+  const [notesByConversation, setNotesByConversation] = useState<Record<string, Note[]>>({});
 
   const refreshInbox = useCallback(() => {
     if (!session) return;
-    fetchInbox(session.token, statusFilter).then((r) => setConversations(r.conversations));
-  }, [session, statusFilter]);
+    fetchInbox(session.token).then((r) => setConversations(r.conversations));
+  }, [session]);
 
   useEffect(() => {
     refreshInbox();
-  }, [refreshInbox]);
+    if (session) fetchAgents(session.token).then((r) => setAgents(r.agents));
+  }, [refreshInbox, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -69,6 +76,17 @@ export function AgentDashboardPage() {
     };
   }, [session, refreshInbox]);
 
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((c) => {
+      if (status !== "ALL" && c.status !== status) return false;
+      if (scope === "mine" && c.assignedAgentId !== session?.agentId) return false;
+      if (scope === "unassigned" && c.assignedAgentId) return false;
+      return true;
+    });
+  }, [conversations, scope, status, session?.agentId]);
+
+  const listTitle = scope === "mine" ? "Assigned to me" : scope === "unassigned" ? "Unassigned" : "All conversations";
+
   async function selectConversation(id: string) {
     if (!session) return;
     const { conversation } = await fetchConversation(session.token, id);
@@ -81,6 +99,13 @@ export function AgentDashboardPage() {
   async function onSend(text: string) {
     if (!session || !selected) return;
     const { message } = await agentReply(session.token, selected.id, text);
+    setMessages((prev) => appendMessage(prev, message));
+  }
+
+  async function onSendFile(file: File) {
+    if (!session || !selected) return;
+    const { url, name } = await uploadFile(file, file.name);
+    const { message } = await agentReply(session.token, selected.id, "", { url, name });
     setMessages((prev) => appendMessage(prev, message));
   }
 
@@ -106,32 +131,34 @@ export function AgentDashboardPage() {
     refreshInbox();
   }
 
+  function onAddNote(text: string) {
+    if (!session || !selected) return;
+    const note: Note = { id: crypto.randomUUID(), author: session.name, text, createdAt: new Date().toISOString() };
+    setNotesByConversation((prev) => ({ ...prev, [selected.id]: [note, ...(prev[selected.id] ?? [])] }));
+  }
+
   if (!session) return null;
 
   return (
     <div className="agent-dashboard">
-      <nav className="icon-rail">
-        <button
-          className={statusFilter === "OPEN" ? "active" : ""}
-          title="Open conversations"
-          onClick={() => setStatusFilter("OPEN")}
-        >
-          💬
-        </button>
-        <button
-          className={statusFilter === "CLOSED" ? "active" : ""}
-          title="Closed conversations"
-          onClick={() => setStatusFilter("CLOSED")}
-        >
-          ✅
-        </button>
-        <div style={{ flex: 1 }} />
-        <button title={session.name} onClick={logout}>
-          🚪
-        </button>
-      </nav>
+      <Sidebar
+        conversations={conversations}
+        agents={agents}
+        currentAgentId={session.agentId}
+        currentAgentName={session.name}
+        scope={scope}
+        status={status}
+        onScopeChange={setScope}
+        onStatusChange={setStatus}
+        onLogout={logout}
+      />
 
-      <InboxList conversations={conversations} selectedId={selected?.id ?? null} onSelect={selectConversation} />
+      <InboxList
+        title={listTitle}
+        conversations={filteredConversations}
+        selectedId={selected?.id ?? null}
+        onSelect={selectConversation}
+      />
 
       {selected ? (
         <>
@@ -139,10 +166,17 @@ export function AgentDashboardPage() {
             conversation={selected}
             messages={messages}
             onSend={onSend}
+            onSendFile={onSendFile}
             onTyping={onTyping}
+            onAssignToMe={onAssignToMe}
+            onToggleStatus={onToggleStatus}
             visitorTyping={visitorTyping}
           />
-          <CustomerInfoPanel conversation={selected} onAssignToMe={onAssignToMe} onToggleStatus={onToggleStatus} />
+          <CustomerInfoPanel
+            conversation={selected}
+            notes={notesByConversation[selected.id] ?? []}
+            onAddNote={onAddNote}
+          />
         </>
       ) : (
         <div className="conversation-thread empty-state">

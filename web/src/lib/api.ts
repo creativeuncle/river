@@ -70,6 +70,10 @@ export function agentLogin(email: string, password: string): Promise<AgentAuthRe
 
 // ---- Agent dashboard ----
 
+export function fetchAgents(token: string): Promise<{ agents: { id: string; name: string; email: string }[] }> {
+  return fetch(`${API_BASE}/api/agents`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
 export function fetchInbox(token: string, status?: "OPEN" | "CLOSED"): Promise<{ conversations: InboxConversation[] }> {
   const qs = status ? `?status=${status}` : "";
   return fetch(`${API_BASE}/api/conversations${qs}`, { headers: agentHeaders(token) }).then((r) => handle(r));

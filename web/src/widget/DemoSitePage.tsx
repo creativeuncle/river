@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ChatWidget } from "./ChatWidget";
+import { ThemeToggle } from "../theme/ThemeToggle";
 
 // Stands in for "any website" that has the support-chat widget embedded —
 // in a real deployment this would just be a <script> snippet on the
@@ -13,6 +14,7 @@ export function DemoSitePage() {
           <a>Products</a>
           <a>Pricing</a>
           <a>About</a>
+          <ThemeToggle />
         </nav>
       </header>
       <main className="demo-site-body">
