@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { createSocket } from "../lib/socket";
 import { getVisitorId } from "../lib/visitor";
+import { appendMessage } from "../lib/messages";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
@@ -30,7 +31,7 @@ export function ChatWidget() {
     socket.on("message:new", (m: Message) => {
       setConversation((prev) => {
         if (prev && m.conversationId === prev.id) {
-          setMessages((prevMsgs) => [...prevMsgs, m]);
+          setMessages((prevMsgs) => appendMessage(prevMsgs, m));
         }
         return prev;
       });
@@ -82,7 +83,7 @@ export function ChatWidget() {
         socketRef.current?.emit("conversation:join", { conversationId: created.id, visitorId: visitorId.current });
       } else {
         const { message } = await sendVisitorMessage(conversation.id, visitorId.current, body, attachment);
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => appendMessage(prev, message));
       }
     } finally {
       setSending(false);

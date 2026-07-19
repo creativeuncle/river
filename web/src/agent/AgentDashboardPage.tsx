@@ -12,6 +12,7 @@ import {
   type Message,
 } from "../lib/api";
 import { createSocket } from "../lib/socket";
+import { appendMessage } from "../lib/messages";
 import { useAgentAuth } from "./AgentAuthContext";
 import { InboxList } from "./InboxList";
 import { ConversationThread } from "./ConversationThread";
@@ -47,7 +48,7 @@ export function AgentDashboardPage() {
     socket.on("message:new", (m: Message) => {
       setSelected((prev) => {
         if (prev && m.conversationId === prev.id) {
-          setMessages((prevMsgs) => [...prevMsgs, m]);
+          setMessages((prevMsgs) => appendMessage(prevMsgs, m));
         }
         return prev;
       });
@@ -80,7 +81,7 @@ export function AgentDashboardPage() {
   async function onSend(text: string) {
     if (!session || !selected) return;
     const { message } = await agentReply(session.token, selected.id, text);
-    setMessages((prev) => [...prev, message]);
+    setMessages((prev) => appendMessage(prev, message));
   }
 
   function onTyping() {
