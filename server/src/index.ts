@@ -10,6 +10,7 @@ import settingsRouter from "./routes/settings.js";
 import groupsRouter from "./routes/groups.js";
 import cannedRepliesRouter from "./routes/cannedReplies.js";
 import { createSocketServer } from "./socket/index.js";
+import { ensureOwnerExists } from "./lib/ensureOwner.js";
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -35,6 +36,10 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 const PORT = Number(process.env.PORT ?? 4000);
-httpServer.listen(PORT, () => {
-  console.log(`river server listening on :${PORT}`);
-});
+ensureOwnerExists()
+  .catch((err) => console.error("Failed to check/assign an Owner:", err))
+  .finally(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`river server listening on :${PORT}`);
+    });
+  });
