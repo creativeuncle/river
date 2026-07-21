@@ -476,9 +476,17 @@ input {
   text-align: center;
 }
 
-/* ---- Agent shell (sidebar + routed page content) ---- */
-.agent-shell {
+/* ---- Agent shell (top bar + sidebar + routed page content) ---- */
+.agent-shell-outer {
   height: 100svh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.agent-shell {
+  flex: 1;
+  min-height: 0;
   display: flex;
   background: var(--bg);
 }
@@ -488,6 +496,118 @@ input {
   min-width: 0;
   display: flex;
   overflow: hidden;
+}
+
+/* Top bar */
+.top-bar {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.top-bar-brand {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  width: 180px;
+}
+
+.top-bar-search {
+  flex: 1;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.top-bar-search .search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--text-muted);
+}
+
+.top-bar-search .search-box input {
+  border: none;
+  background: transparent;
+  padding: 0;
+  flex: 1;
+  color: var(--text);
+}
+
+.top-bar-search .search-box input:focus {
+  outline: none;
+}
+
+.search-kbd {
+  font: 11px ui-monospace, monospace;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.top-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 40;
+}
+
+.top-search-result {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.top-bar-actions {
+  width: 180px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-bar-invite {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 13px;
+}
+
+.top-bar-avatar {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
 }
 
 /* Conversations page: list + thread + info panel */
@@ -1011,7 +1131,47 @@ input {
 .customer-info-header .name {
   font-weight: 600;
   font-size: 14px;
-  flex: 1;
+}
+
+/* Collapsible sections (Additional info, Notes, ...) */
+.info-section {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+}
+
+.info-section summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+
+.info-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.info-section summary .chevron {
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+}
+
+.info-section[open] summary .chevron {
+  transform: rotate(180deg);
+}
+
+.info-section-body {
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-section-body .info-field:last-child {
+  border-bottom: none;
 }
 
 .info-field {
@@ -1136,13 +1296,13 @@ input {
 }
 
 .team-page-header {
-  padding: 18px 24px 0;
+  padding: 22px 28px 4px;
 }
 
 .team-tabs {
   display: flex;
-  gap: 24px;
-  padding: 14px 24px 0;
+  gap: 28px;
+  padding: 16px 28px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1175,7 +1335,7 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 18px 28px;
 }
 
 .team-toolbar .search-box {
@@ -1208,12 +1368,12 @@ input {
 }
 
 .team-table {
-  padding: 0 24px 24px;
+  padding: 0 28px 28px;
 }
 
 .team-table-title {
   font-weight: 600;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .team-table-columns {
@@ -1221,7 +1381,7 @@ input {
   grid-template-columns: 1fr 160px 220px;
   font-size: 12px;
   color: var(--text-muted);
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1229,7 +1389,7 @@ input {
   display: grid;
   grid-template-columns: 1fr 160px 220px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 13px 14px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
 }

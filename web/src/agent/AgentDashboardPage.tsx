@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import {
   agentReply,
   assignToMe,
@@ -21,6 +21,7 @@ export function AgentDashboardPage() {
   const { session } = useAgentAuth();
   const { socket, conversations, refreshInbox, scope, status, cannedReplies, refreshCannedReplies } =
     useOutletContext<AgentOutletContext>();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -75,6 +76,16 @@ export function AgentDashboardPage() {
     socket?.emit("conversation:join", { conversationId: id });
     refreshInbox();
   }
+
+  // Deep-link support: the top bar search and mention toasts navigate to
+  // /agent?open=<id> to jump straight into a conversation.
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+    selectConversation(openId);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   async function onSend(text: string) {
     if (!session || !selected) return;

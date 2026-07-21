@@ -16,6 +16,9 @@ import { createSocket } from "../lib/socket";
 import { useAgentAuth } from "./AgentAuthContext";
 import { Sidebar, type ScopeFilter, type StatusFilter } from "./Sidebar";
 import { ToastStack, type Toast } from "./Toast";
+import { TopBar } from "./TopBar";
+
+const MANAGE_ROLES = ["Owner", "Admin"];
 
 export interface AgentOutletContext {
   socket: Socket | null;
@@ -108,7 +111,7 @@ export function AgentLayout() {
         {
           id,
           text: `${note.agent.name} mentioned you in a note`,
-          onClick: () => navigate("/agent"), // conversation selection happens on the dashboard page
+          onClick: () => navigate(`/agent?open=${conversationId}`),
           conversationId,
         },
       ]);
@@ -149,34 +152,37 @@ export function AgentLayout() {
   };
 
   return (
-    <div className={`agent-shell ${sidebarExpanded ? "" : "sidebar-collapsed"}`}>
-      <Sidebar
-        conversations={conversations}
-        agents={agents}
-        onlineAgentIds={onlineAgentIds}
-        currentAgentId={session.agentId}
-        currentAgentName={session.name}
-        myRole={myRole}
-        expanded={sidebarExpanded}
-        onToggleExpanded={toggleSidebar}
-        activeSection={
-          location.pathname.startsWith("/agent/team")
-            ? "team"
-            : location.pathname.startsWith("/agent/settings")
-              ? "settings"
-              : "conversations"
-        }
-        onNavigateConversations={() => navigate("/agent")}
-        onNavigateTeam={() => navigate("/agent/team")}
-        onNavigateSettings={() => navigate("/agent/settings")}
-        scope={scope}
-        status={status}
-        onScopeChange={setScope}
-        onStatusChange={setStatus}
-        onLogout={logout}
-      />
-      <div className="agent-shell-content">
-        <Outlet context={context} />
+    <div className="agent-shell-outer">
+      <TopBar conversations={conversations} canManage={MANAGE_ROLES.includes(myRole)} onAgentInvited={refreshAgents} />
+      <div className={`agent-shell ${sidebarExpanded ? "" : "sidebar-collapsed"}`}>
+        <Sidebar
+          conversations={conversations}
+          agents={agents}
+          onlineAgentIds={onlineAgentIds}
+          currentAgentId={session.agentId}
+          currentAgentName={session.name}
+          myRole={myRole}
+          expanded={sidebarExpanded}
+          onToggleExpanded={toggleSidebar}
+          activeSection={
+            location.pathname.startsWith("/agent/team")
+              ? "team"
+              : location.pathname.startsWith("/agent/settings")
+                ? "settings"
+                : "conversations"
+          }
+          onNavigateConversations={() => navigate("/agent")}
+          onNavigateTeam={() => navigate("/agent/team")}
+          onNavigateSettings={() => navigate("/agent/settings")}
+          scope={scope}
+          status={status}
+          onScopeChange={setScope}
+          onStatusChange={setStatus}
+          onLogout={logout}
+        />
+        <div className="agent-shell-content">
+          <Outlet context={context} />
+        </div>
       </div>
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))} />
     </div>

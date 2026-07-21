@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PencilEditIcon, Tag01Icon, MailIcon, CallIcon, MapPinIcon, PlusSignIcon, StickyNote01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, StickyNote01Icon } from "@hugeicons/core-free-icons";
 import { addNote, fetchNotes, type Conversation, type ConversationNote } from "../lib/api";
 import { initials } from "../lib/avatar";
 import { useAgentAuth } from "./AgentAuthContext";
@@ -15,11 +15,20 @@ function renderNoteText(text: string, agentNames: string[]) {
   return parts.map((part, i) => (agentNames.includes(part) ? <mark key={i}>@{part}</mark> : part));
 }
 
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
 export function CustomerInfoPanel({ conversation }: { conversation: Conversation }) {
   const { session } = useAgentAuth();
   const { socket, agents } = useOutletContext<AgentOutletContext>();
   const [notes, setNotes] = useState<ConversationNote[]>([]);
   const [noteText, setNoteText] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -38,6 +47,12 @@ export function CustomerInfoPanel({ conversation }: { conversation: Conversation
       socket.off("note:new", onNoteNew);
     };
   }, [socket, conversation.id]);
+
+  useEffect(() => {
+    if (conversation.status !== "OPEN") return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [conversation.status]);
 
   const mentionMatch = noteText.match(/@([a-zA-Z ]*)$/);
   const mentionQuery = mentionMatch ? mentionMatch[1].toLowerCase() : null;
@@ -60,112 +75,96 @@ export function CustomerInfoPanel({ conversation }: { conversation: Conversation
   }
 
   const agentNames = agents.map((a) => a.name);
+  const startedAt = conversation.createdAt ? new Date(conversation.createdAt).getTime() : null;
+  const endedAt = conversation.status === "CLOSED" ? new Date(conversation.updatedAt).getTime() : now;
+  const duration = startedAt ? formatDuration(endedAt - startedAt) : null;
 
   return (
     <div className="customer-info-panel">
       <div className="customer-info-header">
         <div className="agent-avatar">{initials(conversation.visitorName || "G U")}</div>
-        <span className="name">{conversation.visitorName || "Anonymous"}</span>
-        <button className="icon-btn" title="Edit contact details (coming soon)">
-          <HugeiconsIcon icon={PencilEditIcon} size={15} />
-        </button>
-      </div>
-
-      <div className="info-field">
-        <span className="row-icon">
-          <HugeiconsIcon icon={Tag01Icon} size={15} />
-        </span>
-        <div className="info-field-text">
-          <span className="info-field-label">Channel</span>
-          <span className="info-field-value">Web widget</span>
-        </div>
-      </div>
-
-      <div className="info-field">
-        <span className="row-icon" style={{ fontSize: 11 }}>
-          ID
-        </span>
-        <div className="info-field-text">
-          <span className="info-field-label">Conversation id</span>
-          <span className="info-field-value mono">{conversation.id.slice(0, 18)}…</span>
-        </div>
-      </div>
-
-      <div className="info-field">
-        <span className="row-icon">
-          <HugeiconsIcon icon={MailIcon} size={15} />
-        </span>
-        <div className="info-field-text">
-          <span className="info-field-label">Email</span>
-          <span className="info-field-value">{conversation.visitorEmail || "—"}</span>
-        </div>
-      </div>
-
-      <div className="info-field">
-        <span className="row-icon">
-          <HugeiconsIcon icon={CallIcon} size={15} />
-        </span>
-        <div className="info-field-text">
-          <span className="info-field-label">Phone number</span>
-          <span className="info-field-value">—</span>
-        </div>
-      </div>
-
-      <div className="info-field">
-        <span className="row-icon">
-          <HugeiconsIcon icon={MapPinIcon} size={15} />
-        </span>
-        <div className="info-field-text">
-          <span className="info-field-label">Address</span>
-          <span className="info-field-value">—</span>
-        </div>
-      </div>
-
-      <button className="add-attribute-btn" title="Custom attributes — coming soon">
-        <HugeiconsIcon icon={PlusSignIcon} size={14} />
-        Add new attribute
-      </button>
-
-      <div className="notes-section">
-        <div className="notes-section-title">
-          <HugeiconsIcon icon={StickyNote01Icon} size={15} />
-          Notes
-        </div>
-        <div style={{ position: "relative" }}>
-          {mentionQuery !== null && mentionCandidates.length > 0 && (
-            <div className="canned-popover" style={{ bottom: "auto", top: "100%", marginTop: 4 }}>
-              {mentionCandidates.map((a) => (
-                <button type="button" key={a.id} className="canned-popover-item" onClick={() => insertMention(a.name)}>
-                  <span className="canned-title">@{a.name}</span>
-                </button>
-              ))}
+        <div>
+          <div className="name">{conversation.visitorName || "Anonymous"}</div>
+          {conversation.visitorEmail && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              {conversation.visitorEmail}
             </div>
           )}
-          <textarea
-            ref={textareaRef}
-            className="note-input"
-            placeholder="Write a note… use @name to mention a teammate (visible to agents only, not the customer)"
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submitNote();
-              }
-            }}
-          />
         </div>
-        {notes.map((n) => (
-          <div className="note-item" key={n.id}>
-            <div className="note-item-head">
-              <span className="note-item-author">{n.agent.name}</span>
-              <span>{new Date(n.createdAt).toLocaleString()}</span>
-            </div>
-            <div>{renderNoteText(n.text, agentNames)}</div>
-          </div>
-        ))}
-        {notes.length === 0 && <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>No notes yet.</p>}
       </div>
+
+      <details className="info-section" open>
+        <summary>
+          <HugeiconsIcon icon={ArrowDown01Icon} size={14} className="chevron" />
+          Additional info
+        </summary>
+        <div className="info-section-body">
+          {duration && (
+            <div className="info-field">
+              <span className="info-field-text">
+                <span className="info-field-label">Chat duration</span>
+                <span className="info-field-value">{duration}</span>
+              </span>
+            </div>
+          )}
+          <div className="info-field">
+            <span className="info-field-text">
+              <span className="info-field-label">Status</span>
+              <span className={`status-pill ${conversation.status.toLowerCase()}`}>{conversation.status}</span>
+            </span>
+          </div>
+          <div className="info-field">
+            <span className="info-field-text">
+              <span className="info-field-label">Assigned to</span>
+              <span className="info-field-value">{conversation.assignedAgent?.name ?? "Unassigned"}</span>
+            </span>
+          </div>
+        </div>
+      </details>
+
+      <details className="info-section">
+        <summary>
+          <HugeiconsIcon icon={ArrowDown01Icon} size={14} className="chevron" />
+          <HugeiconsIcon icon={StickyNote01Icon} size={14} />
+          Notes {notes.length > 0 && <span className="row-count">{notes.length}</span>}
+        </summary>
+        <div className="info-section-body">
+          <div style={{ position: "relative" }}>
+            {mentionQuery !== null && mentionCandidates.length > 0 && (
+              <div className="canned-popover" style={{ bottom: "auto", top: "100%", marginTop: 4 }}>
+                {mentionCandidates.map((a) => (
+                  <button type="button" key={a.id} className="canned-popover-item" onClick={() => insertMention(a.name)}>
+                    <span className="canned-title">@{a.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              className="note-input"
+              placeholder="Write a note… use @name to mention a teammate (visible to agents only, not the customer)"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  submitNote();
+                }
+              }}
+            />
+          </div>
+          {notes.map((n) => (
+            <div className="note-item" key={n.id}>
+              <div className="note-item-head">
+                <span className="note-item-author">{n.agent.name}</span>
+                <span>{new Date(n.createdAt).toLocaleString()}</span>
+              </div>
+              <div>{renderNoteText(n.text, agentNames)}</div>
+            </div>
+          ))}
+          {notes.length === 0 && <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>No notes yet.</p>}
+        </div>
+      </details>
     </div>
   );
 }
