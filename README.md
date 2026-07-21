@@ -6,10 +6,15 @@ Layout follows wireframe direction **1a** — bubble widget + inbox-style dashbo
 
 ## What it is
 
-- **Customer widget**: a floating chat bubble that can be embedded on any website. Anonymous visitors (no account needed) can open it and start chatting; their identity is a random id kept in their browser.
-- **Agent dashboard**: staff log in, see a live inbox of conversations, open a thread, reply, assign conversations to themselves, and close/reopen them.
+- **Customer widget**: a floating chat bubble that can be embedded on any website. Anonymous visitors (no account needed) fill a short pre-chat form (name/email) and start chatting; their identity is a random id kept in their browser. Position, color, welcome message, and logo are all customizable.
+- **Agent dashboard**: staff log in, see a live inbox of conversations, open a thread, reply, assign conversations to themselves, and close/reopen them. Real-time presence (online/offline) is tracked per agent.
+- **Team management**: invite/edit/remove agents, organize them into groups, and gate sensitive actions (inviting, editing roles, widget settings) to Owner/Admin roles.
+- **Canned replies**: agents can save reusable responses and insert them into a reply by typing `/shortcut`.
+- **Internal notes**: agent-only notes on a conversation, with `@Name` mentions that highlight and push a live notification to the mentioned teammate.
+- **Auto-away message**: if no agent is currently online, a configurable away message is sent automatically the first time a customer messages.
 - Real-time delivery both ways over Socket.io, with everything persisted in Postgres so history survives reloads/reconnects.
-- File/image/document attachments (customer → agent and agent → customer).
+- File/image/document attachments (customer → agent and agent → customer), with inline thumbnails for images.
+- A built-in emoji picker in both the widget and the dashboard composer.
 
 ## Security model (different from a personal E2E chat app)
 
@@ -88,9 +93,9 @@ npm run dev              # listens on :5173
 
 ## What's next
 
-- Canned/quick replies, typing-while-offline queueing
-- Multiple agents + conversation routing/assignment rules
-- Visitor pre-chat form (name/email capture) shown in the wireframe
+- Working hours / staffing schedules, per-agent chat limits (both are visible as UI placeholders in Team → agent details)
+- Custom contact attributes, conversation routing/assignment rules based on groups
 - Read receipts in the inbox list, sound/desktop notifications for agents
+- A real invite flow (email/SMTP) instead of directly creating the teammate's account
 - Production hosting: TLS termination, S3-compatible storage for attachments instead of local disk, managed Postgres
 - Rate limiting / abuse prevention on the public widget endpoints

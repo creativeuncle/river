@@ -6,6 +6,9 @@ import agentsRouter from "./routes/agents.js";
 import { conversationsRouter } from "./routes/conversations.js";
 import { widgetRouter } from "./routes/widget.js";
 import uploadsRouter, { UPLOAD_DIR } from "./routes/uploads.js";
+import settingsRouter from "./routes/settings.js";
+import groupsRouter from "./routes/groups.js";
+import cannedRepliesRouter from "./routes/cannedReplies.js";
 import { createSocketServer } from "./socket/index.js";
 
 const app = express();
@@ -22,6 +25,9 @@ app.use("/api/agents", agentsRouter);
 app.use("/api/conversations", conversationsRouter(io));
 app.use("/api/widget", widgetRouter(io));
 app.use("/api/uploads", uploadsRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api/groups", groupsRouter);
+app.use("/api/canned-replies", cannedRepliesRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import type { IoServer } from "../socket/index.js";
+import { isAnyAgentOnline, type IoServer } from "../socket/index.js";
+import { getOrCreateWidgetSettings } from "../lib/widgetSettings.js";
 
 // Everything under here is reachable by anonymous website visitors (no
 // login) — access to a conversation's data is gated purely by knowing its
@@ -9,10 +10,33 @@ import type { IoServer } from "../socket/index.js";
 export function widgetRouter(io: IoServer) {
   const router = Router();
 
+  // Public widget customization (color, welcome text, position, logo).
+  router.get("/settings", async (_req, res) => {
+    const settings = await getOrCreateWidgetSettings();
+    res.json({ settings });
+  });
+
   async function assertOwnsConversation(conversationId: string, visitorId: string) {
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
     if (!conversation || conversation.visitorId !== visitorId) return null;
     return conversation;
+  }
+
+  // If no agent is currently online, auto-post the configured away message
+  // once per conversation so the customer isn't left hanging.
+  async function maybeSendAwayMessage(conversationId: string) {
+    if (isAnyAgentOnline()) return;
+    const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
+    if (!conversation || conversation.awayMessageSent) return;
+
+    const settings = await getOrCreateWidgetSettings();
+    const message = await prisma.message.create({
+      data: { conversationId, senderType: "AGENT", text: settings.awayMessage, isAutomated: true },
+    });
+    await prisma.conversation.update({ where: { id: conversationId }, data: { awayMessageSent: true } });
+
+    io.to(`conversation:${conversationId}`).emit("message:new", message);
+    io.to("agents").emit("conversation:updated", { conversationId });
   }
 
   // Returns the visitor's most recent conversation (if any), so a returning
@@ -45,17 +69,22 @@ export function widgetRouter(io: IoServer) {
     }
     const { visitorId, visitorName, visitorEmail, text } = parsed.data;
 
-    const conversation = await prisma.conversation.create({
+    const created = await prisma.conversation.create({
       data: {
         visitorId,
         visitorName,
         visitorEmail,
         messages: { create: { senderType: "CUSTOMER", text } },
       },
-      include: { messages: true },
     });
 
-    io.to("agents").emit("conversation:new", { conversationId: conversation.id });
+    io.to("agents").emit("conversation:new", { conversationId: created.id });
+    await maybeSendAwayMessage(created.id);
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: created.id },
+      include: { messages: { orderBy: { createdAt: "asc" } } },
+    });
 
     res.status(201).json({ conversation });
   });
@@ -95,6 +124,7 @@ export function widgetRouter(io: IoServer) {
 
     io.to(`conversation:${conversation.id}`).emit("message:new", message);
     io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    await maybeSendAwayMessage(conversation.id);
 
     res.status(201).json({ message });
   });

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { prisma } from "../prisma.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -40,4 +41,17 @@ export function requireAgent(req: Request, res: Response, next: NextFunction) {
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+}
+
+// Role can be changed after a token was issued, so this always checks the
+// agent's current role in the DB rather than trusting the JWT payload.
+// Must run after requireAgent.
+export function requireRole(roles: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const agent = await prisma.agent.findUnique({ where: { id: req.agent!.agentId }, select: { role: true } });
+    if (!agent || !roles.includes(agent.role)) {
+      return res.status(403).json({ error: "You don't have permission to do this" });
+    }
+    next();
+  };
 }

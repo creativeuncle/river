@@ -15,16 +15,16 @@ import { useAgentAuth } from "./AgentAuthContext";
 import type { AgentOutletContext } from "./AgentLayout";
 import { InboxList } from "./InboxList";
 import { ConversationThread } from "./ConversationThread";
-import { CustomerInfoPanel, type Note } from "./CustomerInfoPanel";
+import { CustomerInfoPanel } from "./CustomerInfoPanel";
 
 export function AgentDashboardPage() {
   const { session } = useAgentAuth();
-  const { socket, conversations, refreshInbox, scope, status } = useOutletContext<AgentOutletContext>();
+  const { socket, conversations, refreshInbox, scope, status, cannedReplies, refreshCannedReplies } =
+    useOutletContext<AgentOutletContext>();
 
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [visitorTyping, setVisitorTyping] = useState(false);
-  const [notesByConversation, setNotesByConversation] = useState<Record<string, Note[]>>({});
 
   useEffect(() => {
     if (!socket) return;
@@ -111,12 +111,6 @@ export function AgentDashboardPage() {
     refreshInbox();
   }
 
-  function onAddNote(text: string) {
-    if (!session || !selected) return;
-    const note: Note = { id: crypto.randomUUID(), author: session.name, text, createdAt: new Date().toISOString() };
-    setNotesByConversation((prev) => ({ ...prev, [selected.id]: [note, ...(prev[selected.id] ?? [])] }));
-  }
-
   if (!session) return null;
 
   return (
@@ -133,18 +127,16 @@ export function AgentDashboardPage() {
           <ConversationThread
             conversation={selected}
             messages={messages}
+            cannedReplies={cannedReplies}
             onSend={onSend}
             onSendFile={onSendFile}
             onTyping={onTyping}
             onAssignToMe={onAssignToMe}
             onToggleStatus={onToggleStatus}
+            onCannedRepliesChanged={refreshCannedReplies}
             visitorTyping={visitorTyping}
           />
-          <CustomerInfoPanel
-            conversation={selected}
-            notes={notesByConversation[selected.id] ?? []}
-            onAddNote={onAddNote}
-          />
+          <CustomerInfoPanel conversation={selected} />
         </>
       ) : (
         <div className="conversation-thread empty-state">

@@ -9,16 +9,29 @@ datasource db {
 
 // A support staff member who logs into the agent dashboard.
 model Agent {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   name         String
-  email        String   @unique
+  email        String    @unique
   passwordHash String
   title        String?
-  role         String   @default("Agent")
-  createdAt    DateTime @default(now())
+  role         String    @default("Agent") // "Owner" | "Admin" | "Agent"
+  groupId      String?
+  group        Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
 
   conversations Conversation[]
   messages      Message[]
+  notes         ConversationNote[]
+}
+
+// A team an agent can belong to (one group per agent for now).
+model Group {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  agents Agent[]
 }
 
 enum ConversationStatus {
@@ -30,17 +43,19 @@ enum ConversationStatus {
 // A visitor is identified only by a client-generated id (stored in
 // their browser's localStorage) — no account/login required to chat.
 model Conversation {
-  id         String             @id @default(uuid())
-  visitorId  String
-  visitorName  String?
-  visitorEmail String?
-  status     ConversationStatus @default(OPEN)
-  assignedAgentId String?
-  assignedAgent   Agent?         @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  id               String             @id @default(uuid())
+  visitorId        String
+  visitorName      String?
+  visitorEmail     String?
+  status           ConversationStatus @default(OPEN)
+  assignedAgentId  String?
+  assignedAgent    Agent?             @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  awayMessageSent  Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   messages Message[]
+  notes    ConversationNote[]
 
   @@index([visitorId])
   @@index([status, updatedAt])
@@ -61,9 +76,45 @@ model Message {
   text           String
   attachmentUrl  String?
   attachmentName String?
+  isAutomated    Boolean      @default(false)
   readByAgent    Boolean      @default(false)
   readByVisitor  Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+// Internal, agent-only notes on a conversation. Supports @mentioning a
+// teammate by name; mentionedAgentIds is resolved server-side at write time.
+model ConversationNote {
+  id                String       @id @default(uuid())
+  conversationId    String
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agentId           String
+  agent             Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  text              String
+  mentionedAgentIds String[]     @default([])
+  createdAt         DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// A reusable canned response agents can insert into a reply with "/shortcut".
+model CannedReply {
+  id        String   @id @default(uuid())
+  shortcut  String   @unique
+  title     String
+  text      String
+  createdAt DateTime @default(now())
+}
+
+// Single global row of widget customization + away-message settings.
+model WidgetSettings {
+  id             String  @id @default("default")
+  companyName    String  @default("Support")
+  primaryColor   String  @default("#2f6fed")
+  position       String  @default("right") // "left" | "right"
+  welcomeMessage String  @default("Hi! How can we help?")
+  awayMessage    String  @default("We're away right now — leave a message and we'll get back to you soon.")
+  logoUrl        String?
 }

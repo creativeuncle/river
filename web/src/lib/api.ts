@@ -22,6 +22,7 @@ export interface Message {
   text: string;
   attachmentUrl: string | null;
   attachmentName: string | null;
+  isAutomated: boolean;
   readByAgent: boolean;
   readByVisitor: boolean;
   createdAt: string;
@@ -49,7 +50,7 @@ export interface InboxConversation extends Conversation {
 
 export interface AgentAuthResponse {
   token: string;
-  agent: { id: string; name: string; email: string };
+  agent: { id: string; name: string; email: string; title?: string | null; role?: string };
 }
 
 export function agentRegister(name: string, email: string, password: string): Promise<AgentAuthResponse> {
@@ -76,10 +77,12 @@ export interface Agent {
   email: string;
   title: string | null;
   role: string;
+  groupId: string | null;
+  lastSeenAt: string | null;
   createdAt: string;
 }
 
-export function fetchAgents(token: string): Promise<{ agents: Agent[] }> {
+export function fetchAgents(token: string): Promise<{ agents: Agent[]; onlineAgentIds: string[] }> {
   return fetch(`${API_BASE}/api/agents`, { headers: agentHeaders(token) }).then((r) => handle(r));
 }
 
@@ -97,7 +100,7 @@ export function createAgent(
 export function updateAgent(
   token: string,
   id: string,
-  data: { name?: string; title?: string | null; role?: string }
+  data: { name?: string; title?: string | null; role?: string; groupId?: string | null }
 ): Promise<{ agent: Agent }> {
   return fetch(`${API_BASE}/api/agents/${id}`, {
     method: "PATCH",
@@ -204,4 +207,131 @@ export async function uploadFile(file: Blob, filename: string): Promise<{ url: s
   form.append("file", file, filename);
   const res = await fetch(`${API_BASE}/api/uploads`, { method: "POST", body: form });
   return handle(res);
+}
+
+// ---- Groups ----
+
+export interface Group {
+  id: string;
+  name: string;
+  createdAt: string;
+  agents: { id: string; name: string }[];
+}
+
+export function fetchGroups(token: string): Promise<{ groups: Group[] }> {
+  return fetch(`${API_BASE}/api/groups`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function createGroup(token: string, name: string): Promise<{ group: Group }> {
+  return fetch(`${API_BASE}/api/groups`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify({ name }),
+  }).then((r) => handle(r));
+}
+
+export async function deleteGroup(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/groups/${id}`, { method: "DELETE", headers: agentHeaders(token) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+}
+
+// ---- Canned replies ----
+
+export interface CannedReply {
+  id: string;
+  shortcut: string;
+  title: string;
+  text: string;
+  createdAt: string;
+}
+
+export function fetchCannedReplies(token: string): Promise<{ cannedReplies: CannedReply[] }> {
+  return fetch(`${API_BASE}/api/canned-replies`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function createCannedReply(
+  token: string,
+  data: { shortcut: string; title: string; text: string }
+): Promise<{ cannedReply: CannedReply }> {
+  return fetch(`${API_BASE}/api/canned-replies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export function updateCannedReply(
+  token: string,
+  id: string,
+  data: { shortcut?: string; title?: string; text?: string }
+): Promise<{ cannedReply: CannedReply }> {
+  return fetch(`${API_BASE}/api/canned-replies/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export async function deleteCannedReply(token: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/canned-replies/${id}`, { method: "DELETE", headers: agentHeaders(token) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error ?? `Request failed (${res.status})`);
+  }
+}
+
+// ---- Widget settings ----
+
+export interface WidgetSettings {
+  id: string;
+  companyName: string;
+  primaryColor: string;
+  position: "left" | "right";
+  welcomeMessage: string;
+  awayMessage: string;
+  logoUrl: string | null;
+}
+
+export function fetchWidgetSettings(): Promise<{ settings: WidgetSettings }> {
+  return fetch(`${API_BASE}/api/widget/settings`).then((r) => handle(r));
+}
+
+export function updateWidgetSettings(
+  token: string,
+  data: Partial<Omit<WidgetSettings, "id">>
+): Promise<{ settings: WidgetSettings }> {
+  return fetch(`${API_BASE}/api/settings/widget`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+// ---- Conversation notes ----
+
+export interface ConversationNote {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  agent: { id: string; name: string };
+  text: string;
+  mentionedAgentIds: string[];
+  createdAt: string;
+}
+
+export function fetchNotes(token: string, conversationId: string): Promise<{ notes: ConversationNote[] }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/notes`, { headers: agentHeaders(token) }).then((r) =>
+    handle(r)
+  );
+}
+
+export function addNote(token: string, conversationId: string, text: string): Promise<{ note: ConversationNote }> {
+  return fetch(`${API_BASE}/api/conversations/${conversationId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify({ text }),
+  }).then((r) => handle(r));
 }

@@ -22,12 +22,14 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 
 export type ScopeFilter = "all" | "mine" | "unassigned";
 export type StatusFilter = "ALL" | "OPEN" | "CLOSED";
-export type SidebarSection = "conversations" | "team";
+export type SidebarSection = "conversations" | "team" | "settings";
+
+const MANAGE_ROLES = ["Owner", "Admin"];
 
 // Icons in between stand in for sections this build doesn't have yet
 // (reports, automations, integrations) — decorative nav placeholders
-// matching the reference's icon rail. Conversations and Team are the two
-// real, functional sections and are wired to actual navigation.
+// matching the reference's icon rail. Conversations, Team, and Settings
+// are the real, functional sections and are wired to actual navigation.
 const PLACEHOLDER_NAV_TOP = [
   { icon: SearchIcon, label: "Search" },
   { icon: Flag01Icon, label: "Saved" },
@@ -39,11 +41,17 @@ const PLACEHOLDER_NAV_TOP = [
 
 const PLACEHOLDER_NAV_BOTTOM = [{ icon: Share08Icon, label: "Integrations" }];
 
+function PresenceDot({ online }: { online: boolean }) {
+  return <span className={`presence-dot ${online ? "online" : "offline"}`} />;
+}
+
 export function Sidebar({
   conversations,
   agents,
+  onlineAgentIds,
   currentAgentId,
   currentAgentName,
+  myRole,
   scope,
   status,
   expanded,
@@ -51,14 +59,17 @@ export function Sidebar({
   onToggleExpanded,
   onNavigateConversations,
   onNavigateTeam,
+  onNavigateSettings,
   onScopeChange,
   onStatusChange,
   onLogout,
 }: {
   conversations: InboxConversation[];
   agents: Agent[];
+  onlineAgentIds: Set<string>;
   currentAgentId: string;
   currentAgentName: string;
+  myRole: string;
   scope: ScopeFilter;
   status: StatusFilter;
   expanded: boolean;
@@ -66,10 +77,12 @@ export function Sidebar({
   onToggleExpanded: () => void;
   onNavigateConversations: () => void;
   onNavigateTeam: () => void;
+  onNavigateSettings: () => void;
   onScopeChange: (s: ScopeFilter) => void;
   onStatusChange: (s: StatusFilter) => void;
   onLogout: () => void;
 }) {
+  const canManage = MANAGE_ROLES.includes(myRole);
   const counts = {
     all: conversations.length,
     mine: conversations.filter((c) => c.assignedAgentId === currentAgentId).length,
@@ -109,9 +122,15 @@ export function Sidebar({
           <HugeiconsIcon icon={UserGroupIcon} size={18} />
         </button>
         <div className="rail-spacer" />
-        <button className="icon-btn rail-icon" title="Settings">
-          <HugeiconsIcon icon={Setting06Icon} size={18} />
-        </button>
+        {canManage && (
+          <button
+            className={`icon-btn rail-icon ${activeSection === "settings" ? "active" : ""}`}
+            title="Settings"
+            onClick={onNavigateSettings}
+          >
+            <HugeiconsIcon icon={Setting06Icon} size={18} />
+          </button>
+        )}
         <button className="icon-btn rail-icon" title="Help">
           <HugeiconsIcon icon={HelpCircleIcon} size={18} />
         </button>
@@ -152,6 +171,14 @@ export function Sidebar({
           </span>
           <span className="row-label">Team</span>
         </button>
+        {canManage && (
+          <button className={`sidebar-row ${activeSection === "settings" ? "active" : ""}`} onClick={onNavigateSettings}>
+            <span className="row-icon">
+              <HugeiconsIcon icon={Setting06Icon} size={15} />
+            </span>
+            <span className="row-label">Widget settings</span>
+          </button>
+        )}
       </div>
 
       {activeSection === "conversations" && (
@@ -227,8 +254,9 @@ export function Sidebar({
             <div className="agent-avatar">{initials(a.name)}</div>
             <div className="agent-row-text">
               <span className="agent-row-name">{a.name}</span>
-              <span className="agent-row-status" style={a.id !== currentAgentId ? { color: "var(--text-muted)" } : undefined}>
-                {a.id === currentAgentId ? "Online" : "—"}
+              <span className="agent-row-status">
+                <PresenceDot online={onlineAgentIds.has(a.id)} />
+                {onlineAgentIds.has(a.id) ? "Online" : "Offline"}
               </span>
             </div>
           </div>
@@ -240,7 +268,10 @@ export function Sidebar({
           <div className="agent-avatar">{initials(currentAgentName)}</div>
           <div className="agent-row-text">
             <span className="agent-row-name">{currentAgentName}</span>
-            <span className="agent-row-status">Online</span>
+            <span className="agent-row-status">
+              <PresenceDot online={onlineAgentIds.has(currentAgentId)} />
+              {onlineAgentIds.has(currentAgentId) ? "Online" : "Connecting…"}
+            </span>
           </div>
         </div>
         <button className="icon-btn" title="Log out" onClick={onLogout}>

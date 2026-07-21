@@ -123,5 +123,54 @@ export function conversationsRouter(io: IoServer) {
     res.json({ conversation });
   });
 
+  router.get("/:id/notes", async (req, res) => {
+    const notes = await prisma.conversationNote.findMany({
+      where: { conversationId: req.params.id },
+      include: { agent: { select: { id: true, name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ notes });
+  });
+
+  const noteSchema = z.object({ text: z.string().min(1).max(2000) });
+
+  // Internal, agent-only notes. Writing "@Full Name" mentions a teammate —
+  // matched against real agent names and resolved to ids so the UI can
+  // highlight/notify them, rather than trusting arbitrary client input.
+  router.post("/:id/notes", async (req, res) => {
+    const parsed = noteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const conversation = await prisma.conversation.findUnique({ where: { id: req.params.id } });
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    const allAgents = await prisma.agent.findMany({ select: { id: true, name: true } });
+    const mentionedAgentIds = allAgents
+      .filter((a) => parsed.data.text.toLowerCase().includes(`@${a.name.toLowerCase()}`))
+      .map((a) => a.id);
+
+    const note = await prisma.conversationNote.create({
+      data: {
+        conversationId: conversation.id,
+        agentId: req.agent!.agentId,
+        text: parsed.data.text,
+        mentionedAgentIds,
+      },
+      include: { agent: { select: { id: true, name: true } } },
+    });
+
+    io.to(`conversation-agents:${conversation.id}`).emit("note:new", note);
+    for (const agentId of mentionedAgentIds) {
+      if (agentId !== req.agent!.agentId) {
+        io.to(`agent:${agentId}`).emit("note:mention", { note, conversationId: conversation.id });
+      }
+    }
+
+    res.status(201).json({ note });
+  });
+
   return router;
 }

@@ -1,31 +1,44 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import type { Socket } from "socket.io-client";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Attachment01Icon, SentIcon } from "@hugeicons/core-free-icons";
 import {
   fetchMyConversation,
   fetchVisitorMessages,
+  fetchWidgetSettings,
   sendVisitorMessage,
   startConversation,
   uploadFile,
   type Conversation,
   type Message,
+  type WidgetSettings,
 } from "../lib/api";
 import { createSocket } from "../lib/socket";
-import { getVisitorId } from "../lib/visitor";
+import { getVisitorId, getVisitorProfile, saveVisitorProfile } from "../lib/visitor";
 import { appendMessage } from "../lib/messages";
+import { isImageAttachment } from "../lib/attachments";
+import { EmojiPicker } from "../components/EmojiPicker";
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
+  const [settings, setSettings] = useState<WidgetSettings | null>(null);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [agentTyping, setAgentTyping] = useState(false);
+  const [profile, setProfile] = useState(getVisitorProfile());
+  const [preChatName, setPreChatName] = useState("");
+  const [preChatEmail, setPreChatEmail] = useState("");
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const visitorId = useRef(getVisitorId());
+
+  useEffect(() => {
+    fetchWidgetSettings().then((r) => setSettings(r.settings));
+  }, []);
 
   useEffect(() => {
     const socket = createSocket();
@@ -79,7 +92,12 @@ export function ChatWidget() {
     setSending(true);
     try {
       if (!conversation) {
-        const { conversation: created } = await startConversation(visitorId.current, body || attachment!.name);
+        const { conversation: created } = await startConversation(
+          visitorId.current,
+          body || attachment!.name,
+          profile?.name,
+          profile?.email || undefined
+        );
         setConversation(created);
         setMessages(created.messages ?? []);
         socketRef.current?.emit("conversation:join", { conversationId: created.id, visitorId: visitorId.current });
@@ -109,20 +127,39 @@ export function ChatWidget() {
     if (conversation) socketRef.current?.emit("typing", { conversationId: conversation.id, from: "customer" });
   }
 
+  function onEmojiSelect(emoji: string) {
+    setText((t) => t + emoji);
+    textInputRef.current?.focus();
+  }
+
+  function onStartChat(e: FormEvent) {
+    e.preventDefault();
+    if (!preChatName.trim()) return;
+    const newProfile = { name: preChatName.trim(), email: preChatEmail.trim() };
+    saveVisitorProfile(newProfile);
+    setProfile(newProfile);
+  }
+
+  const accentStyle = settings ? ({ "--accent": settings.primaryColor } as CSSProperties) : undefined;
+  const positionClass = settings?.position === "left" ? "left" : "";
+  const needsPreChatForm = !conversation && !profile;
+
   if (!open) {
     return (
-      <button className="widget-bubble" onClick={() => setOpen(true)} aria-label="Open chat">
+      <button className={`widget-bubble ${positionClass}`} style={accentStyle} onClick={() => setOpen(true)} aria-label="Open chat">
         💬
       </button>
     );
   }
 
   return (
-    <div className="widget-panel">
+    <div className={`widget-panel ${positionClass}`} style={accentStyle}>
       <header>
-        <div className="widget-avatar">🎧</div>
+        <div className="widget-avatar">
+          {settings?.logoUrl ? <img src={settings.logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%" }} /> : "🎧"}
+        </div>
         <div className="widget-header-text">
-          <span className="agent-name">Support Agent</span>
+          <span className="agent-name">{settings?.companyName ?? "Support"}</span>
           <span className="online-dot">
             <i /> online
           </span>
@@ -132,53 +169,82 @@ export function ChatWidget() {
         </button>
       </header>
 
-      <div className="messages">
-        {messages.length === 0 && <p className="muted widget-welcome">Hi! How can we help?</p>}
-        {messages.map((m) => (
-          <div key={m.id} className={`bubble ${m.senderType === "CUSTOMER" ? "mine" : "theirs"}`}>
-            {m.text && <p>{m.text}</p>}
-            {m.attachmentUrl && (
-              <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="file-chip">
-                📎 {m.attachmentName ?? "attachment"}
-              </a>
-            )}
-            <time>{new Date(m.createdAt).toLocaleTimeString()}</time>
-          </div>
-        ))}
-        {agentTyping && <p className="muted typing-indicator">Agent is typing…</p>}
-        <div ref={bottomRef} />
-      </div>
-
-      {conversation?.status === "CLOSED" ? (
-        <p className="muted widget-closed-note">This conversation has been closed.</p>
-      ) : (
-        <form className="composer" onSubmit={onSubmit}>
-          <div className="composer-row">
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              onChange={onPickFile}
-              accept="image/*,video/*,.zip,.pdf,.psd,.ai,.eps,.svg"
-            />
-            <button type="button" className="icon-btn" onClick={() => fileInputRef.current?.click()} disabled={sending}>
-              <HugeiconsIcon icon={Attachment01Icon} size={17} />
-            </button>
-            <input
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                onTyping();
-              }}
-              placeholder="Type a message…"
-              disabled={sending}
-            />
-            <button type="submit" className="send-btn" disabled={sending || !text.trim()}>
-              <HugeiconsIcon icon={SentIcon} size={14} />
-              Send
-            </button>
-          </div>
+      {needsPreChatForm ? (
+        <form className="prechat-form" onSubmit={onStartChat}>
+          <p>{settings?.welcomeMessage ?? "Hi! How can we help?"}</p>
+          <label>
+            Your name
+            <input value={preChatName} onChange={(e) => setPreChatName(e.target.value)} required />
+          </label>
+          <label>
+            Email (optional)
+            <input type="email" value={preChatEmail} onChange={(e) => setPreChatEmail(e.target.value)} />
+          </label>
+          <button type="submit" className="send-btn" disabled={!preChatName.trim()}>
+            Start chat
+          </button>
         </form>
+      ) : (
+        <>
+          <div className="messages">
+            {messages.length === 0 && <p className="muted widget-welcome">{settings?.welcomeMessage ?? "Hi! How can we help?"}</p>}
+            {messages.map((m) => (
+              <div key={m.id} className={`bubble ${m.senderType === "CUSTOMER" ? "mine" : "theirs"}`}>
+                {m.text && <p>{m.text}</p>}
+                {m.attachmentUrl &&
+                  (isImageAttachment(m.attachmentName) ? (
+                    <img
+                      src={m.attachmentUrl}
+                      alt={m.attachmentName ?? "attachment"}
+                      className="image-attachment"
+                      onClick={() => window.open(m.attachmentUrl!, "_blank")}
+                    />
+                  ) : (
+                    <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="file-chip">
+                      📎 {m.attachmentName ?? "attachment"}
+                    </a>
+                  ))}
+                <time>{new Date(m.createdAt).toLocaleTimeString()}</time>
+              </div>
+            ))}
+            {agentTyping && <p className="muted typing-indicator">Agent is typing…</p>}
+            <div ref={bottomRef} />
+          </div>
+
+          {conversation?.status === "CLOSED" ? (
+            <p className="muted widget-closed-note">This conversation has been closed.</p>
+          ) : (
+            <form className="composer" onSubmit={onSubmit}>
+              <div className="composer-row">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                  onChange={onPickFile}
+                  accept="image/*,video/*,.zip,.pdf,.psd,.ai,.eps,.svg"
+                />
+                <button type="button" className="icon-btn" onClick={() => fileInputRef.current?.click()} disabled={sending}>
+                  <HugeiconsIcon icon={Attachment01Icon} size={17} />
+                </button>
+                <EmojiPicker onSelect={onEmojiSelect} disabled={sending} />
+                <input
+                  ref={textInputRef}
+                  value={text}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    onTyping();
+                  }}
+                  placeholder="Type a message…"
+                  disabled={sending}
+                />
+                <button type="submit" className="send-btn" disabled={sending || !text.trim()}>
+                  <HugeiconsIcon icon={SentIcon} size={14} />
+                  Send
+                </button>
+              </div>
+            </form>
+          )}
+        </>
       )}
     </div>
   );
