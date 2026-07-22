@@ -14,9 +14,22 @@ import {
 } from "../lib/api";
 import { createSocket } from "../lib/socket";
 import { useAgentAuth } from "./AgentAuthContext";
-import { Sidebar, type ScopeFilter, type StatusFilter } from "./Sidebar";
+import { Sidebar, type ScopeFilter, type SidebarSection, type StatusFilter } from "./Sidebar";
 import { ToastStack, type Toast } from "./Toast";
 import { TopBar } from "./TopBar";
+
+const SECTION_PATHS: Record<SidebarSection, string> = {
+  home: "/agent/home",
+  conversations: "/agent",
+  engage: "/agent/engage",
+  automate: "/agent/automate",
+  archives: "/agent/archives",
+  team: "/agent/team",
+  reports: "/agent/reports",
+  apps: "/agent/apps",
+  billing: "/agent/billing",
+  settings: "/agent/settings",
+};
 
 const MANAGE_ROLES = ["Owner", "Admin"];
 
@@ -135,6 +148,12 @@ export function AgentLayout() {
 
   const myRole = agents.find((a) => a.id === session.agentId)?.role ?? "Agent";
 
+  const activeSection: SidebarSection =
+    (Object.keys(SECTION_PATHS) as SidebarSection[]).find((key) => {
+      const path = SECTION_PATHS[key];
+      return path === "/agent" ? location.pathname === "/agent" : location.pathname.startsWith(path);
+    }) ?? "conversations";
+
   const context: AgentOutletContext = {
     socket,
     conversations,
@@ -164,16 +183,8 @@ export function AgentLayout() {
           myRole={myRole}
           expanded={sidebarExpanded}
           onToggleExpanded={toggleSidebar}
-          activeSection={
-            location.pathname.startsWith("/agent/team")
-              ? "team"
-              : location.pathname.startsWith("/agent/settings")
-                ? "settings"
-                : "conversations"
-          }
-          onNavigateConversations={() => navigate("/agent")}
-          onNavigateTeam={() => navigate("/agent/team")}
-          onNavigateSettings={() => navigate("/agent/settings")}
+          activeSection={activeSection}
+          onNavigate={(section) => navigate(SECTION_PATHS[section])}
           scope={scope}
           status={status}
           onScopeChange={setScope}

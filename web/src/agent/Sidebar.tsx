@@ -1,14 +1,15 @@
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon, type HugeiconsIconProps } from "@hugeicons/react";
 import {
   SearchIcon,
-  Flag01Icon,
   Home01Icon,
-  MonitorDotIcon,
-  RightTriangleIcon,
-  ClipboardListIcon,
   Chat01Icon,
-  Share08Icon,
+  Megaphone01Icon,
+  Robot01Icon,
+  Archive01Icon,
   UserGroupIcon,
+  Chart01Icon,
+  GridViewIcon,
+  CreditCardIcon,
   Setting06Icon,
   HelpCircleIcon,
   SidebarLeft01Icon,
@@ -22,24 +23,39 @@ import { ThemeToggle } from "../theme/ThemeToggle";
 
 export type ScopeFilter = "all" | "mine" | "unassigned";
 export type StatusFilter = "ALL" | "OPEN" | "CLOSED";
-export type SidebarSection = "conversations" | "team" | "settings";
+export type SidebarSection =
+  | "home"
+  | "conversations"
+  | "engage"
+  | "automate"
+  | "archives"
+  | "team"
+  | "reports"
+  | "apps"
+  | "billing"
+  | "settings";
 
 const MANAGE_ROLES = ["Owner", "Admin"];
 
-// Icons in between stand in for sections this build doesn't have yet
-// (reports, automations, integrations) — decorative nav placeholders
-// matching the reference's icon rail. Conversations, Team, and Settings
-// are the real, functional sections and are wired to actual navigation.
-const PLACEHOLDER_NAV_TOP = [
-  { icon: SearchIcon, label: "Search" },
-  { icon: Flag01Icon, label: "Saved" },
-  { icon: Home01Icon, label: "Home" },
-  { icon: MonitorDotIcon, label: "Channels" },
-  { icon: RightTriangleIcon, label: "Reports" },
-  { icon: ClipboardListIcon, label: "Automations" },
-];
+interface NavItem {
+  key: SidebarSection;
+  label: string;
+  icon: HugeiconsIconProps["icon"];
+  gated?: boolean;
+}
 
-const PLACEHOLDER_NAV_BOTTOM = [{ icon: Share08Icon, label: "Integrations" }];
+const NAV_ITEMS: NavItem[] = [
+  { key: "home", label: "Home", icon: Home01Icon },
+  { key: "conversations", label: "Chat", icon: Chat01Icon },
+  { key: "engage", label: "Engage", icon: Megaphone01Icon },
+  { key: "automate", label: "Automate", icon: Robot01Icon },
+  { key: "archives", label: "Archives", icon: Archive01Icon },
+  { key: "team", label: "Team", icon: UserGroupIcon },
+  { key: "reports", label: "Reports", icon: Chart01Icon },
+  { key: "apps", label: "Apps", icon: GridViewIcon },
+  { key: "billing", label: "Billing", icon: CreditCardIcon },
+  { key: "settings", label: "Settings", icon: Setting06Icon, gated: true },
+];
 
 function PresenceDot({ online }: { online: boolean }) {
   return <span className={`presence-dot ${online ? "online" : "offline"}`} />;
@@ -57,9 +73,7 @@ export function Sidebar({
   expanded,
   activeSection,
   onToggleExpanded,
-  onNavigateConversations,
-  onNavigateTeam,
-  onNavigateSettings,
+  onNavigate,
   onScopeChange,
   onStatusChange,
   onLogout,
@@ -75,14 +89,13 @@ export function Sidebar({
   expanded: boolean;
   activeSection: SidebarSection;
   onToggleExpanded: () => void;
-  onNavigateConversations: () => void;
-  onNavigateTeam: () => void;
-  onNavigateSettings: () => void;
+  onNavigate: (section: SidebarSection) => void;
   onScopeChange: (s: ScopeFilter) => void;
   onStatusChange: (s: StatusFilter) => void;
   onLogout: () => void;
 }) {
   const canManage = MANAGE_ROLES.includes(myRole);
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.gated || canManage);
   const counts = {
     all: conversations.length,
     mine: conversations.filter((c) => c.assignedAgentId === currentAgentId).length,
@@ -97,40 +110,17 @@ export function Sidebar({
         <button className="icon-btn rail-toggle" title="Expand sidebar" onClick={onToggleExpanded}>
           <HugeiconsIcon icon={SidebarLeft01Icon} size={18} />
         </button>
-        {PLACEHOLDER_NAV_TOP.map(({ icon, label }) => (
-          <button key={label} className="icon-btn rail-icon" title={label}>
-            <HugeiconsIcon icon={icon} size={18} />
-          </button>
-        ))}
-        <button
-          className={`icon-btn rail-icon ${activeSection === "conversations" ? "active" : ""}`}
-          title="Conversations"
-          onClick={onNavigateConversations}
-        >
-          <HugeiconsIcon icon={Chat01Icon} size={18} />
-        </button>
-        {PLACEHOLDER_NAV_BOTTOM.map(({ icon, label }) => (
-          <button key={label} className="icon-btn rail-icon" title={label}>
-            <HugeiconsIcon icon={icon} size={18} />
-          </button>
-        ))}
-        <button
-          className={`icon-btn rail-icon ${activeSection === "team" ? "active" : ""}`}
-          title="Team"
-          onClick={onNavigateTeam}
-        >
-          <HugeiconsIcon icon={UserGroupIcon} size={18} />
-        </button>
-        <div className="rail-spacer" />
-        {canManage && (
+        {visibleNavItems.map(({ key, label, icon }) => (
           <button
-            className={`icon-btn rail-icon ${activeSection === "settings" ? "active" : ""}`}
-            title="Settings"
-            onClick={onNavigateSettings}
+            key={key}
+            className={`icon-btn rail-icon ${activeSection === key ? "active" : ""}`}
+            title={label}
+            onClick={() => onNavigate(key)}
           >
-            <HugeiconsIcon icon={Setting06Icon} size={18} />
+            <HugeiconsIcon icon={icon} size={18} />
           </button>
-        )}
+        ))}
+        <div className="rail-spacer" />
         <button className="icon-btn rail-icon" title="Help">
           <HugeiconsIcon icon={HelpCircleIcon} size={18} />
         </button>
@@ -156,29 +146,14 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-section">
-        <button
-          className={`sidebar-row ${activeSection === "conversations" ? "active" : ""}`}
-          onClick={onNavigateConversations}
-        >
-          <span className="row-icon">
-            <HugeiconsIcon icon={Chat01Icon} size={15} />
-          </span>
-          <span className="row-label">Conversations</span>
-        </button>
-        <button className={`sidebar-row ${activeSection === "team" ? "active" : ""}`} onClick={onNavigateTeam}>
-          <span className="row-icon">
-            <HugeiconsIcon icon={UserGroupIcon} size={15} />
-          </span>
-          <span className="row-label">Team</span>
-        </button>
-        {canManage && (
-          <button className={`sidebar-row ${activeSection === "settings" ? "active" : ""}`} onClick={onNavigateSettings}>
+        {visibleNavItems.map(({ key, label, icon }) => (
+          <button key={key} className={`sidebar-row ${activeSection === key ? "active" : ""}`} onClick={() => onNavigate(key)}>
             <span className="row-icon">
-              <HugeiconsIcon icon={Setting06Icon} size={15} />
+              <HugeiconsIcon icon={icon} size={15} />
             </span>
-            <span className="row-label">Widget settings</span>
+            <span className="row-label">{label}</span>
           </button>
-        )}
+        ))}
       </div>
 
       {activeSection === "conversations" && (
