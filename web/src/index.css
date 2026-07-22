@@ -374,14 +374,27 @@ input {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: var(--accent);
-  color: white;
+  background: transparent;
   border: none;
-  font-size: 24px;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.18s ease;
+  animation: widget-bubble-in 0.25s ease-out;
+}
+
+.widget-bubble:hover {
+  transform: scale(1.06);
+}
+
+.widget-bubble-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: block;
 }
 
 .widget-bubble.left {
@@ -403,11 +416,36 @@ input {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
+  transform-origin: bottom right;
+  animation: widget-panel-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .widget-panel.left {
   right: auto;
   left: 24px;
+  transform-origin: bottom left;
+}
+
+@keyframes widget-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes widget-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .widget-panel header {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import type { Socket } from "socket.io-client";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Attachment01Icon, SentIcon } from "@hugeicons/core-free-icons";
+import chatIcon from "./chat-icon.svg";
 import {
   fetchMyConversation,
   fetchVisitorMessages,
@@ -147,7 +148,7 @@ export function ChatWidget() {
   if (!open) {
     return (
       <button className={`widget-bubble ${positionClass}`} style={accentStyle} onClick={() => setOpen(true)} aria-label="Open chat">
-        💬
+        <img src={chatIcon} alt="" className="widget-bubble-icon" />
       </button>
     );
   }
