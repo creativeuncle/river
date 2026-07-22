@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { agentLogin, agentRegister } from "../lib/api";
 import { useAgentAuth } from "./AgentAuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { RiverLogo } from "../components/RiverLogo";
 
 export function AgentLoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -34,7 +35,7 @@ export function AgentLoginPage() {
       <div style={{ display: "flex", justifyContent: "center" }}>
         <ThemeToggle />
       </div>
-      <h1>river</h1>
+      <RiverLogo className="auth-logo" />
       <p className="tagline">Agent dashboard</p>
       <form onSubmit={onSubmit}>
         {mode === "register" && (

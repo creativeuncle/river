@@ -158,6 +158,14 @@ input {
   text-align: center;
 }
 
+.auth-logo {
+  height: 40px;
+  width: auto;
+  margin: 0 auto 8px;
+  display: block;
+  color: var(--text);
+}
+
 .auth-page .tagline {
   margin-bottom: 24px;
   color: var(--text-secondary);
@@ -549,10 +557,10 @@ input {
 }
 
 .top-bar-brand {
-  font-weight: 700;
-  font-size: 15px;
+  height: 22px;
+  width: auto;
+  max-width: 180px;
   color: var(--text);
-  width: 180px;
 }
 
 .top-bar-search {

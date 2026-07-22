@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { SearchIcon, UserAdd01Icon } from "@hugeicons/core-free-icons";
 import { createAgent, type InboxConversation } from "../lib/api";
 import { initials } from "../lib/avatar";
+import { RiverLogo } from "../components/RiverLogo";
 import { useAgentAuth } from "./AgentAuthContext";
 import { InviteAgentModal } from "./InviteAgentModal";
 
@@ -62,7 +63,7 @@ export function TopBar({
 
   return (
     <div className="top-bar" ref={rootRef}>
-      <div className="top-bar-brand">river</div>
+      <RiverLogo className="top-bar-brand" />
 
       <div className="top-bar-search">
         <div className="search-box">
