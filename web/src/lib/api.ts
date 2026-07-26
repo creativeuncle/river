@@ -1,5 +1,15 @@
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:4000";
 
+// Uploaded file/attachment/logo URLs come back from the API as server-relative
+// paths (e.g. "/uploads/xyz.png"), which only resolve correctly when the web
+// app and API happen to share an origin. When embedded on a third-party site
+// (see public/widget.js) — or in any setup where they don't — a bare relative
+// path resolves against the wrong origin and 404s. Always route it through
+// this before using it as an <img src>, href, etc.
+export function resolveAssetUrl(url: string): string {
+  return /^https?:\/\//.test(url) ? url : `${API_BASE}${url}`;
+}
+
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

@@ -10,7 +10,14 @@ import {
   Setting06Icon,
   Delete02Icon,
 } from "@hugeicons/core-free-icons";
-import { createCannedReply, deleteCannedReply, type CannedReply, type Conversation, type Message } from "../lib/api";
+import {
+  createCannedReply,
+  deleteCannedReply,
+  resolveAssetUrl,
+  type CannedReply,
+  type Conversation,
+  type Message,
+} from "../lib/api";
 import { initials } from "../lib/avatar";
 import { isImageAttachment } from "../lib/attachments";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -122,13 +129,13 @@ export function ConversationThread({
             {m.attachmentUrl &&
               (isImageAttachment(m.attachmentName) ? (
                 <img
-                  src={m.attachmentUrl}
+                  src={resolveAssetUrl(m.attachmentUrl)}
                   alt={m.attachmentName ?? "attachment"}
                   className="image-attachment"
-                  onClick={() => window.open(m.attachmentUrl!, "_blank")}
+                  onClick={() => window.open(resolveAssetUrl(m.attachmentUrl!), "_blank")}
                 />
               ) : (
-                <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="file-chip">
+                <a href={resolveAssetUrl(m.attachmentUrl)} target="_blank" rel="noreferrer" className="file-chip">
                   📎 {m.attachmentName ?? "attachment"}
                 </a>
               ))}

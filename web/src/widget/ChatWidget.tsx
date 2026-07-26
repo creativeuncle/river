@@ -7,6 +7,7 @@ import {
   fetchMyConversation,
   fetchVisitorMessages,
   fetchWidgetSettings,
+  resolveAssetUrl,
   sendVisitorMessage,
   startConversation,
   uploadFile,
@@ -172,7 +173,11 @@ export function ChatWidget() {
     <div className={`widget-panel ${positionClass}`} style={accentStyle}>
       <header>
         <div className="widget-avatar">
-          {settings?.logoUrl ? <img src={settings.logoUrl} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%" }} /> : "🎧"}
+          {settings?.logoUrl ? (
+            <img src={resolveAssetUrl(settings.logoUrl)} alt="" style={{ width: "100%", height: "100%", borderRadius: "50%" }} />
+          ) : (
+            "🎧"
+          )}
         </div>
         <div className="widget-header-text">
           <span className="agent-name">{settings?.companyName ?? "Support"}</span>
@@ -210,13 +215,13 @@ export function ChatWidget() {
                 {m.attachmentUrl &&
                   (isImageAttachment(m.attachmentName) ? (
                     <img
-                      src={m.attachmentUrl}
+                      src={resolveAssetUrl(m.attachmentUrl)}
                       alt={m.attachmentName ?? "attachment"}
                       className="image-attachment"
-                      onClick={() => window.open(m.attachmentUrl!, "_blank")}
+                      onClick={() => window.open(resolveAssetUrl(m.attachmentUrl!), "_blank")}
                     />
                   ) : (
-                    <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="file-chip">
+                    <a href={resolveAssetUrl(m.attachmentUrl)} target="_blank" rel="noreferrer" className="file-chip">
                       📎 {m.attachmentName ?? "attachment"}
                     </a>
                   ))}

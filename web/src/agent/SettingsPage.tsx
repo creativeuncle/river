@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
-import { fetchWidgetSettings, updateWidgetSettings, uploadFile, type WidgetSettings } from "../lib/api";
+import { fetchWidgetSettings, resolveAssetUrl, updateWidgetSettings, uploadFile, type WidgetSettings } from "../lib/api";
 import { useAgentAuth } from "./AgentAuthContext";
 import type { AgentOutletContext } from "./AgentLayout";
 
@@ -123,7 +123,13 @@ export function SettingsPage() {
         <label>
           Logo
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {settings.logoUrl && <img src={settings.logoUrl} alt="Logo" style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }} />}
+            {settings.logoUrl && (
+              <img
+                src={resolveAssetUrl(settings.logoUrl)}
+                alt="Logo"
+                style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
+              />
+            )}
             <input type="file" accept="image/*" onChange={onLogoPick} />
           </div>
         </label>

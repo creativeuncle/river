@@ -5,8 +5,11 @@
 
   if (document.getElementById("river-widget-frame")) return;
 
-  var CLOSED_SIZE = { width: "90px", height: "90px" };
-  var OPEN_SIZE = { width: "380px", height: "600px" };
+  // Sized with headroom beyond the widget's own footprint (bubble/panel +
+  // their bottom/right margin) so the drop-shadow doesn't get a visible
+  // hard-edged clip at the iframe boundary.
+  var CLOSED_SIZE = { width: "130px", height: "130px" };
+  var OPEN_SIZE = { width: "440px", height: "620px" };
 
   var iframe = document.createElement("iframe");
   iframe.id = "river-widget-frame";
