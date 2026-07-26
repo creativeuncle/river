@@ -82,7 +82,7 @@ export function AgentLoginPage() {
       const displayName = email.split("@")[0];
       const res = await agentRegister(displayName, email, password, phone.trim() || undefined);
       login({ token: res.token, agentId: res.agent.id, name: res.agent.name, email: res.agent.email });
-      navigate("/agent");
+      navigate("/agent/onboarding");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

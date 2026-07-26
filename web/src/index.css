@@ -394,6 +394,149 @@ input {
   font-size: 12px;
 }
 
+/* Onboarding wizard */
+.onboarding-card {
+  max-width: 460px;
+  margin: 10svh auto 0;
+  padding: 0 20px 60px;
+  text-align: left;
+}
+
+.onboarding-card h1 {
+  font-size: 26px;
+  margin: 16px 0 6px;
+}
+
+.onboarding-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding-progress-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.onboarding-progress-dashes {
+  display: flex;
+  gap: 6px;
+}
+
+.onboarding-dash {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.onboarding-dash.filled {
+  background: var(--text);
+}
+
+.onboarding-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.onboarding-input {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.onboarding-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.embed-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: var(--surface);
+}
+
+.embed-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.embed-code {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.embed-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  background: #111827;
+  color: #fff;
+  border: none;
+  padding: 9px 14px;
+  border-radius: 8px;
+}
+
+.channel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.channel-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.channel-option.selected {
+  border-color: var(--accent);
+}
+
+.channel-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.channel-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* Shared chat bubbles / composer */
 .messages {
   flex: 1;

@@ -10,6 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { DemoSitePage } from "./widget/DemoSitePage";
 import { AgentLoginPage } from "./agent/AgentLoginPage";
+import { OnboardingPage } from "./agent/OnboardingPage";
 import { AgentLayout } from "./agent/AgentLayout";
 import { AgentDashboardPage } from "./agent/AgentDashboardPage";
 import { TeamPage } from "./agent/TeamPage";
@@ -28,6 +29,14 @@ function App() {
     <Routes>
       <Route path="/" element={<DemoSitePage />} />
       <Route path="/agent/login" element={<AgentLoginPage />} />
+      <Route
+        path="/agent/onboarding"
+        element={
+          <RequireAgent>
+            <OnboardingPage />
+          </RequireAgent>
+        }
+      />
       <Route
         path="/agent"
         element={
