@@ -53,11 +53,16 @@ export interface AgentAuthResponse {
   agent: { id: string; name: string; email: string; title?: string | null; role?: string };
 }
 
-export function agentRegister(name: string, email: string, password: string): Promise<AgentAuthResponse> {
+export function agentRegister(
+  name: string,
+  email: string,
+  password: string,
+  phone?: string
+): Promise<AgentAuthResponse> {
   return fetch(`${API_BASE}/api/agents/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ name, email, password, phone: phone || undefined }),
   }).then((r) => handle(r));
 }
 
@@ -76,6 +81,7 @@ export interface Agent {
   name: string;
   email: string;
   title: string | null;
+  phone: string | null;
   role: string;
   groupId: string | null;
   lastSeenAt: string | null;

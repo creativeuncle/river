@@ -75,7 +75,12 @@ export function AgentLayout() {
     if (!session) return;
     fetchAgents(session.token).then((r) => {
       setAgents(r.agents);
-      setOnlineAgentIds(new Set(r.onlineAgentIds));
+      // Union rather than replace: the socket's "presence:list"/"presence:update"
+      // events are the source of truth for online status. This REST snapshot can
+      // resolve after those events (e.g. right after this agent's own socket
+      // connects), and replacing the set outright would then incorrectly stomp
+      // their own online status back to offline with nothing left to correct it.
+      setOnlineAgentIds((prev) => new Set([...prev, ...r.onlineAgentIds]));
     });
   }, [session]);
 

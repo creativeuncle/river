@@ -12,11 +12,14 @@ const AGENT_SELECT = {
   name: true,
   email: true,
   title: true,
+  phone: true,
   role: true,
   groupId: true,
   lastSeenAt: true,
   createdAt: true,
 } as const;
+
+const STRONG_PASSWORD = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
 
 // The sidebar's Agents list and the Team page — any logged-in agent can see their teammates.
 router.get("/", requireAgent, async (_req, res) => {
@@ -30,7 +33,8 @@ router.get("/", requireAgent, async (_req, res) => {
 const registerSchema = z.object({
   name: z.string().min(1).max(80),
   email: z.string().email(),
-  password: z.string().min(8).max(256),
+  password: z.string().min(12).max(256).regex(STRONG_PASSWORD, "Password does not meet the strength requirements"),
+  phone: z.string().max(30).optional(),
 });
 
 // Public self-signup — the very first agent in the system becomes Owner.
@@ -39,7 +43,7 @@ router.post("/register", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  const { name, email, password } = parsed.data;
+  const { name, email, password, phone } = parsed.data;
 
   const existing = await prisma.agent.findUnique({ where: { email } });
   if (existing) {
@@ -49,7 +53,7 @@ router.post("/register", async (req, res) => {
   const agentCount = await prisma.agent.count();
   const passwordHash = await bcrypt.hash(password, 12);
   const agent = await prisma.agent.create({
-    data: { name, email, passwordHash, role: agentCount === 0 ? "Owner" : "Agent" },
+    data: { name, email, passwordHash, phone, role: agentCount === 0 ? "Owner" : "Agent" },
     select: AGENT_SELECT,
   });
 
