@@ -86,6 +86,17 @@ body {
   flex-direction: column;
 }
 
+/* The bare page an embedded <iframe> from a third-party site points at
+   (see public/widget.js) — no chrome, transparent so only the bubble/panel
+   shapes show through, not a solid rectangle over the host page. */
+body.widget-embed-body {
+  background: transparent;
+}
+
+body.widget-embed-body #root {
+  min-height: 0;
+}
+
 h1,
 h2,
 h3 {

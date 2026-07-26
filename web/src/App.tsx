@@ -9,6 +9,7 @@ import {
   Robot01Icon,
 } from "@hugeicons/core-free-icons";
 import { DemoSitePage } from "./widget/DemoSitePage";
+import { WidgetEmbedPage } from "./widget/WidgetEmbedPage";
 import { AgentLoginPage } from "./agent/AgentLoginPage";
 import { OnboardingPage } from "./agent/OnboardingPage";
 import { AgentLayout } from "./agent/AgentLayout";
@@ -28,6 +29,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<DemoSitePage />} />
+      <Route path="/widget-embed" element={<WidgetEmbedPage />} />
       <Route path="/agent/login" element={<AgentLoginPage />} />
       <Route
         path="/agent/onboarding"

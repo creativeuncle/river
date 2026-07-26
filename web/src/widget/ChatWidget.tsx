@@ -41,6 +41,21 @@ export function ChatWidget() {
     fetchWidgetSettings().then((r) => setSettings(r.settings));
   }, []);
 
+  // Tells the host page's iframe wrapper (see public/widget.js) how big and
+  // which corner to render the iframe in — a no-op when this widget isn't
+  // embedded in an iframe (postMessage to yourself is harmless).
+  useEffect(() => {
+    window.parent.postMessage({ source: "river-widget", type: open ? "open" : "closed" }, "*");
+  }, [open]);
+
+  useEffect(() => {
+    if (!settings) return;
+    window.parent.postMessage(
+      { source: "river-widget", type: "position", side: settings.position === "left" ? "left" : "right" },
+      "*"
+    );
+  }, [settings]);
+
   useEffect(() => {
     const socket = createSocket();
     socketRef.current = socket;
