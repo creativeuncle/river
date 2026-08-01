@@ -47,6 +47,8 @@ export interface Conversation {
   assignedAgentId?: string | null;
   assignedAgent: { id: string; name: string } | null;
   createdAt?: string;
+  closedAt?: string | null;
+  rating?: number | null;
   updatedAt: string;
   messages?: Message[];
 }
@@ -309,10 +311,20 @@ export interface WidgetSettings {
   welcomeMessage: string;
   awayMessage: string;
   logoUrl: string | null;
+  proactiveMessageEnabled: boolean;
+  proactiveMessageText: string;
+  proactiveMessageDelaySeconds: number;
+  notifyEmail: string | null;
+  emailNotificationsEnabled: boolean;
+  whatsappNotificationsEnabled: boolean;
 }
 
 export function fetchWidgetSettings(): Promise<{ settings: WidgetSettings }> {
   return fetch(`${API_BASE}/api/widget/settings`).then((r) => handle(r));
+}
+
+export function fetchAgentWidgetSettings(token: string): Promise<{ settings: WidgetSettings; isEmailConfigured: boolean }> {
+  return fetch(`${API_BASE}/api/settings/widget`, { headers: agentHeaders(token) }).then((r) => handle(r));
 }
 
 export function updateWidgetSettings(
@@ -320,6 +332,152 @@ export function updateWidgetSettings(
   data: Partial<Omit<WidgetSettings, "id">>
 ): Promise<{ settings: WidgetSettings }> {
   return fetch(`${API_BASE}/api/settings/widget`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+// ---- CSAT rating ----
+
+export function submitRating(
+  conversationId: string,
+  visitorId: string,
+  rating: number,
+  comment?: string
+): Promise<{ conversation: Conversation }> {
+  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/rating`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ visitorId, rating, comment }),
+  }).then((r) => handle(r));
+}
+
+// ---- Reports ----
+
+export interface ReportsSummary {
+  rangeDays: number;
+  totalConversations: number;
+  avgResponseTimeSeconds: number | null;
+  avgResolutionTimeSeconds: number | null;
+  agentChatCounts: { agentId: string; name: string; count: number }[];
+  dailyVolume: { date: string; count: number }[];
+  csat: {
+    averageRating: number | null;
+    totalRatings: number;
+    distribution: { star: number; count: number }[];
+  };
+}
+
+export function fetchReportsSummary(token: string, days = 30): Promise<ReportsSummary> {
+  return fetch(`${API_BASE}/api/reports/summary?days=${days}`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+// ---- Archives ----
+
+export interface ArchivedConversation {
+  id: string;
+  visitorName: string | null;
+  visitorEmail: string | null;
+  status: "OPEN" | "CLOSED";
+  assignedAgent: { id: string; name: string } | null;
+  createdAt: string;
+  closedAt: string | null;
+  rating: number | null;
+  lastMessage: Message | null;
+}
+
+export function fetchArchives(
+  token: string,
+  params: { q?: string; from?: string; to?: string } = {}
+): Promise<{ conversations: ArchivedConversation[] }> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  return fetch(`${API_BASE}/api/conversations/archives?${qs.toString()}`, { headers: agentHeaders(token) }).then((r) =>
+    handle(r)
+  );
+}
+
+export async function downloadArchivesCsv(
+  token: string,
+  params: { q?: string; from?: string; to?: string } = {}
+): Promise<void> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  const res = await fetch(`${API_BASE}/api/conversations/archives/export.csv?${qs.toString()}`, {
+    headers: agentHeaders(token),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "conversations-export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- Webhooks ----
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  createdAt: string;
+}
+
+export function fetchWebhooks(token: string): Promise<{ webhooks: Webhook[]; availableEvents: string[] }> {
+  return fetch(`${API_BASE}/api/webhooks`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function createWebhook(token: string, data: { url: string; events: string[] }): Promise<{ webhook: Webhook }> {
+  return fetch(`${API_BASE}/api/webhooks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export function updateWebhook(
+  token: string,
+  id: string,
+  data: { url?: string; events?: string[]; enabled?: boolean }
+): Promise<{ webhook: Webhook }> {
+  return fetch(`${API_BASE}/api/webhooks/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
+  }).then((r) => handle(r));
+}
+
+export function deleteWebhook(token: string, id: string): Promise<void> {
+  return fetch(`${API_BASE}/api/webhooks/${id}`, { method: "DELETE", headers: agentHeaders(token) }).then((r) => {
+    if (!r.ok) throw new Error(`Request failed (${r.status})`);
+  });
+}
+
+// ---- Billing ----
+
+export interface BillingSettings {
+  id: string;
+  plan: "Free" | "Pro" | "Business";
+  seatLimit: number;
+}
+
+export function fetchBilling(token: string): Promise<{ billing: BillingSettings; seatCount: number }> {
+  return fetch(`${API_BASE}/api/billing`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function updateBilling(
+  token: string,
+  data: { plan?: BillingSettings["plan"]; seatLimit?: number }
+): Promise<{ billing: BillingSettings }> {
+  return fetch(`${API_BASE}/api/billing`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...agentHeaders(token) },
     body: JSON.stringify(data),

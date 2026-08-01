@@ -1,20 +1,132 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useOutletContext } from "react-router-dom";
-import { fetchWidgetSettings, resolveAssetUrl, updateWidgetSettings, uploadFile, type WidgetSettings } from "../lib/api";
+import {
+  createWebhook,
+  deleteWebhook,
+  fetchAgentWidgetSettings,
+  fetchWebhooks,
+  resolveAssetUrl,
+  updateWebhook,
+  updateWidgetSettings,
+  uploadFile,
+  type Webhook,
+  type WidgetSettings,
+} from "../lib/api";
 import { useAgentAuth } from "./AgentAuthContext";
 import type { AgentOutletContext } from "./AgentLayout";
+
+function WebhooksSection({ token }: { token: string }) {
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [availableEvents, setAvailableEvents] = useState<string[]>([]);
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function refresh() {
+    fetchWebhooks(token).then((r) => {
+      setWebhooks(r.webhooks);
+      setAvailableEvents(r.availableEvents);
+    });
+  }
+
+  useEffect(refresh, [token]);
+
+  function toggleEvent(e: string) {
+    setEvents((prev) => (prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e]));
+  }
+
+  async function onAdd(e: FormEvent) {
+    e.preventDefault();
+    if (!url.trim() || events.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await createWebhook(token, { url: url.trim(), events });
+      setUrl("");
+      setEvents([]);
+      refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add webhook");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onToggleEnabled(hook: Webhook) {
+    await updateWebhook(token, hook.id, { enabled: !hook.enabled });
+    refresh();
+  }
+
+  async function onDelete(hook: Webhook) {
+    if (!confirm(`Remove webhook to ${hook.url}?`)) return;
+    await deleteWebhook(token, hook.id);
+    refresh();
+  }
+
+  return (
+    <div className="settings-section">
+      <h3>Webhooks</h3>
+      <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+        Notify an external URL (e.g. a Zapier catch hook) when a conversation starts, closes, or gets a new message.
+      </p>
+
+      {webhooks.length > 0 && (
+        <div className="webhook-list">
+          {webhooks.map((w) => (
+            <div className="webhook-row" key={w.id}>
+              <div>
+                <div className="webhook-url">{w.url}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{w.events.join(", ")}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button type="button" onClick={() => onToggleEnabled(w)}>
+                  {w.enabled ? "Enabled" : "Disabled"}
+                </button>
+                <button type="button" onClick={() => onDelete(w)}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={onAdd} className="webhook-form">
+        <input placeholder="https://hooks.zapier.com/..." value={url} onChange={(e) => setUrl(e.target.value)} />
+        <div className="webhook-events">
+          {availableEvents.map((e) => (
+            <label key={e} className="webhook-event-check">
+              <input type="checkbox" checked={events.includes(e)} onChange={() => toggleEvent(e)} />
+              {e}
+            </label>
+          ))}
+        </div>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" className="send-btn" disabled={busy || !url.trim() || events.length === 0}>
+          Add webhook
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const { session } = useAgentAuth();
   const { myRole } = useOutletContext<AgentOutletContext>();
   const [settings, setSettings] = useState<WidgetSettings | null>(null);
+  const [isEmailConfigured, setIsEmailConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetchWidgetSettings().then((r) => setSettings(r.settings));
-  }, []);
+    if (!session) return;
+    fetchAgentWidgetSettings(session.token).then((r) => {
+      setSettings(r.settings);
+      setIsEmailConfigured(r.isEmailConfigured);
+    });
+  }, [session]);
 
   const canManage = ["Owner", "Admin"].includes(myRole);
 
@@ -32,6 +144,12 @@ export function SettingsPage() {
         welcomeMessage: settings.welcomeMessage,
         awayMessage: settings.awayMessage,
         logoUrl: settings.logoUrl,
+        proactiveMessageEnabled: settings.proactiveMessageEnabled,
+        proactiveMessageText: settings.proactiveMessageText,
+        proactiveMessageDelaySeconds: settings.proactiveMessageDelaySeconds,
+        notifyEmail: settings.notifyEmail,
+        emailNotificationsEnabled: settings.emailNotificationsEnabled,
+        whatsappNotificationsEnabled: settings.whatsappNotificationsEnabled,
       });
       setSettings(updated);
       setSaved(true);
@@ -134,6 +252,70 @@ export function SettingsPage() {
           </div>
         </label>
 
+        <div className="settings-section">
+          <h3>Engage: proactive message</h3>
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={settings.proactiveMessageEnabled}
+              onChange={(e) => setSettings({ ...settings, proactiveMessageEnabled: e.target.checked })}
+            />
+            Show a proactive "Need help?" bubble if the visitor hasn't opened the widget yet
+          </label>
+          {settings.proactiveMessageEnabled && (
+            <>
+              <label>
+                Message text
+                <input
+                  value={settings.proactiveMessageText}
+                  onChange={(e) => setSettings({ ...settings, proactiveMessageText: e.target.value })}
+                />
+              </label>
+              <label>
+                Delay before showing (seconds)
+                <input
+                  type="number"
+                  min={3}
+                  max={300}
+                  value={settings.proactiveMessageDelaySeconds}
+                  onChange={(e) => setSettings({ ...settings, proactiveMessageDelaySeconds: Number(e.target.value) })}
+                  style={{ maxWidth: 120 }}
+                />
+              </label>
+            </>
+          )}
+        </div>
+
+        <div className="settings-section">
+          <h3>Offline notifications</h3>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            Get notified when a customer messages in and no agent is currently online.
+          </p>
+          <label className="settings-toggle-row">
+            <input
+              type="checkbox"
+              checked={settings.emailNotificationsEnabled}
+              onChange={(e) => setSettings({ ...settings, emailNotificationsEnabled: e.target.checked })}
+              disabled={!isEmailConfigured}
+            />
+            Email notifications {!isEmailConfigured && <span className="muted">(not configured — set SMTP_HOST/SMTP_USER/SMTP_PASS)</span>}
+          </label>
+          {settings.emailNotificationsEnabled && isEmailConfigured && (
+            <label>
+              Notify email address
+              <input
+                type="email"
+                value={settings.notifyEmail ?? ""}
+                onChange={(e) => setSettings({ ...settings, notifyEmail: e.target.value })}
+              />
+            </label>
+          )}
+          <label className="settings-toggle-row" style={{ marginTop: 10 }}>
+            <input type="checkbox" checked={false} disabled title="Coming soon" />
+            WhatsApp notifications <span className="muted">(coming soon)</span>
+          </label>
+        </div>
+
         {error && <p className="error">{error}</p>}
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button type="submit" className="send-btn" disabled={saving}>
@@ -142,6 +324,8 @@ export function SettingsPage() {
           {saved && <span className="muted">Saved ✓</span>}
         </div>
       </form>
+
+      {session && <WebhooksSection token={session.token} />}
     </div>
   );
 }

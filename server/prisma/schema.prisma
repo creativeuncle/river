@@ -52,6 +52,10 @@ model Conversation {
   assignedAgentId  String?
   assignedAgent    Agent?             @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
   awayMessageSent  Boolean            @default(false)
+  firstAgentReplyAt DateTime?
+  closedAt         DateTime?
+  rating           Int?
+  ratingComment    String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -118,4 +122,34 @@ model WidgetSettings {
   welcomeMessage String  @default("Hi! How can we help?")
   awayMessage    String  @default("We're away right now — leave a message and we'll get back to you soon.")
   logoUrl        String?
+
+  // Engage: proactive message bubble shown after a delay if the visitor
+  // hasn't opened the widget yet.
+  proactiveMessageEnabled      Boolean @default(false)
+  proactiveMessageText         String  @default("Need help? We're here to chat!")
+  proactiveMessageDelaySeconds Int     @default(15)
+
+  // Notifications sent when a customer messages in and no agent is online.
+  notifyEmail                  String?
+  emailNotificationsEnabled    Boolean @default(false)
+  whatsappNotificationsEnabled Boolean @default(false)
+}
+
+// A webhook a customer configures to be notified (via HTTP POST) of events
+// like a new message or a conversation closing — the foundation for a
+// Zapier-style integration.
+model Webhook {
+  id        String   @id @default(uuid())
+  url       String
+  events    String[] // subset of: "conversation.created", "conversation.closed", "message.new"
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// Single global row tracking the account's plan — internal bookkeeping only,
+// no real payment processing wired up yet.
+model BillingSettings {
+  id        String @id @default("default")
+  plan      String @default("Free") // "Free" | "Pro" | "Business"
+  seatLimit Int    @default(3)
 }

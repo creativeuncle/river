@@ -1,13 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import {
-  Archive01Icon,
-  CreditCardIcon,
-  GridViewIcon,
-  Home01Icon,
-  Megaphone01Icon,
-  Chart01Icon,
-  Robot01Icon,
-} from "@hugeicons/core-free-icons";
+import { GridViewIcon, Home01Icon, Megaphone01Icon, Robot01Icon } from "@hugeicons/core-free-icons";
 import { DemoSitePage } from "./widget/DemoSitePage";
 import { WidgetEmbedPage } from "./widget/WidgetEmbedPage";
 import { AgentLoginPage } from "./agent/AgentLoginPage";
@@ -16,6 +8,9 @@ import { AgentLayout } from "./agent/AgentLayout";
 import { AgentDashboardPage } from "./agent/AgentDashboardPage";
 import { TeamPage } from "./agent/TeamPage";
 import { SettingsPage } from "./agent/SettingsPage";
+import { ReportsPage } from "./agent/ReportsPage";
+import { ArchivesPage } from "./agent/ArchivesPage";
+import { BillingPage } from "./agent/BillingPage";
 import { ComingSoonPage } from "./agent/ComingSoonPage";
 import { useAgentAuth } from "./agent/AgentAuthContext";
 
@@ -57,7 +52,7 @@ function App() {
           element={
             <ComingSoonPage
               title="Engage"
-              description="Proactive messages and campaigns are coming soon."
+              description="Turn on the proactive 'Need help?' popup from Settings → Engage."
               icon={Megaphone01Icon}
             />
           }
@@ -68,25 +63,20 @@ function App() {
             <ComingSoonPage title="Automate" description="Chatbots and automation rules are coming soon." icon={Robot01Icon} />
           }
         />
-        <Route
-          path="archives"
-          element={
-            <ComingSoonPage title="Archives" description="Older, closed conversations will live here." icon={Archive01Icon} />
-          }
-        />
+        <Route path="archives" element={<ArchivesPage />} />
         <Route path="team" element={<TeamPage />} />
-        <Route
-          path="reports"
-          element={<ComingSoonPage title="Reports" description="Analytics and reporting are coming soon." icon={Chart01Icon} />}
-        />
+        <Route path="reports" element={<ReportsPage />} />
         <Route
           path="apps"
-          element={<ComingSoonPage title="Apps" description="Integrations and apps are coming soon." icon={GridViewIcon} />}
+          element={
+            <ComingSoonPage
+              title="Apps"
+              description="Webhooks (Zapier-style) are available under Settings. More integrations are coming soon."
+              icon={GridViewIcon}
+            />
+          }
         />
-        <Route
-          path="billing"
-          element={<ComingSoonPage title="Billing" description="Plan and billing details are coming soon." icon={CreditCardIcon} />}
-        />
+        <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { isAnyAgentOnline, type IoServer } from "../socket/index.js";
 import { getOrCreateWidgetSettings } from "../lib/widgetSettings.js";
+import { sendNotificationEmail } from "../lib/email.js";
+import { triggerWebhooks } from "../lib/webhooks.js";
 
 // Everything under here is reachable by anonymous website visitors (no
 // login) — access to a conversation's data is gated purely by knowing its
@@ -37,6 +39,21 @@ export function widgetRouter(io: IoServer) {
 
     io.to(`conversation:${conversationId}`).emit("message:new", message);
     io.to("agents").emit("conversation:updated", { conversationId });
+  }
+
+  // If no agent is online, optionally email the configured notify address
+  // so a message isn't missed entirely while everyone's away.
+  async function maybeNotifyOffline(conversationId: string, customerText: string) {
+    if (isAnyAgentOnline()) return;
+    const settings = await getOrCreateWidgetSettings();
+    if (!settings.emailNotificationsEnabled || !settings.notifyEmail) return;
+    const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
+    const from = conversation?.visitorName || conversation?.visitorEmail || "A visitor";
+    await sendNotificationEmail(
+      settings.notifyEmail,
+      `New message from ${from}`,
+      `${from} sent a message while no agent was online:\n\n"${customerText || "(attachment)"}"\n\nReply from the dashboard.`
+    );
   }
 
   // Returns the visitor's most recent conversation (if any), so a returning
@@ -80,6 +97,8 @@ export function widgetRouter(io: IoServer) {
 
     io.to("agents").emit("conversation:new", { conversationId: created.id });
     await maybeSendAwayMessage(created.id);
+    await maybeNotifyOffline(created.id, text);
+    triggerWebhooks("conversation.created", { conversationId: created.id, visitorName, visitorEmail, text });
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: created.id },
@@ -125,6 +144,8 @@ export function widgetRouter(io: IoServer) {
     io.to(`conversation:${conversation.id}`).emit("message:new", message);
     io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
     await maybeSendAwayMessage(conversation.id);
+    await maybeNotifyOffline(conversation.id, parsed.data.text);
+    triggerWebhooks("message.new", { conversationId: conversation.id, senderType: "CUSTOMER", text: parsed.data.text });
 
     res.status(201).json({ message });
   });
@@ -149,6 +170,36 @@ export function widgetRouter(io: IoServer) {
     });
 
     res.json({ messages });
+  });
+
+  const ratingSchema = z.object({
+    visitorId: z.string().min(1),
+    rating: z.number().int().min(1).max(5),
+    comment: z.string().max(500).optional(),
+  });
+
+  // Customer Satisfaction (CSAT): the widget shows a 1-5 rating prompt once
+  // a conversation is closed; this records it. One rating per conversation.
+  router.post("/conversations/:id/rating", async (req, res) => {
+    const parsed = ratingSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.flatten() });
+    }
+    const conversation = await assertOwnsConversation(req.params.id, parsed.data.visitorId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+    if (conversation.rating != null) {
+      return res.status(409).json({ error: "This conversation has already been rated" });
+    }
+
+    const updated = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { rating: parsed.data.rating, ratingComment: parsed.data.comment },
+    });
+    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+
+    res.json({ conversation: updated });
   });
 
   return router;

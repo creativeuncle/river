@@ -10,6 +10,7 @@ import {
   resolveAssetUrl,
   sendVisitorMessage,
   startConversation,
+  submitRating,
   uploadFile,
   type Conversation,
   type Message,
@@ -32,6 +33,9 @@ export function ChatWidget() {
   const [profile, setProfile] = useState(getVisitorProfile());
   const [preChatName, setPreChatName] = useState("");
   const [preChatEmail, setPreChatEmail] = useState("");
+  const [showProactive, setShowProactive] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [ratingHover, setRatingHover] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -42,12 +46,24 @@ export function ChatWidget() {
     fetchWidgetSettings().then((r) => setSettings(r.settings));
   }, []);
 
+  // Engage: show a proactive bubble if the visitor hasn't opened the widget
+  // within the configured delay. Only ever shown once per page load.
+  useEffect(() => {
+    if (!settings?.proactiveMessageEnabled || open) return;
+    const timer = setTimeout(() => setShowProactive(true), settings.proactiveMessageDelaySeconds * 1000);
+    return () => clearTimeout(timer);
+  }, [settings, open]);
+
   // Tells the host page's iframe wrapper (see public/widget.js) how big and
   // which corner to render the iframe in — a no-op when this widget isn't
   // embedded in an iframe (postMessage to yourself is harmless).
   useEffect(() => {
     window.parent.postMessage({ source: "river-widget", type: open ? "open" : "closed" }, "*");
   }, [open]);
+
+  useEffect(() => {
+    window.parent.postMessage({ source: "river-widget", type: "proactive", visible: showProactive && !open }, "*");
+  }, [showProactive, open]);
 
   useEffect(() => {
     if (!settings) return;
@@ -149,6 +165,17 @@ export function ChatWidget() {
     textInputRef.current?.focus();
   }
 
+  async function onSubmitRating(rating: number) {
+    if (!conversation) return;
+    setRatingSubmitted(true);
+    try {
+      await submitRating(conversation.id, visitorId.current, rating);
+      setConversation((prev) => (prev ? { ...prev, rating } : prev));
+    } catch {
+      setRatingSubmitted(false);
+    }
+  }
+
   function onStartChat(e: FormEvent) {
     e.preventDefault();
     if (!preChatName.trim()) return;
@@ -163,9 +190,19 @@ export function ChatWidget() {
 
   if (!open) {
     return (
-      <button className={`widget-bubble ${positionClass}`} style={accentStyle} onClick={() => setOpen(true)} aria-label="Open chat">
-        <img src={chatIcon} alt="" className="widget-bubble-icon" />
-      </button>
+      <>
+        {showProactive && settings?.proactiveMessageEnabled && (
+          <div className={`proactive-bubble ${positionClass}`} style={accentStyle}>
+            <button className="proactive-bubble-close" onClick={() => setShowProactive(false)} aria-label="Dismiss">
+              ✕
+            </button>
+            <p onClick={() => setOpen(true)}>{settings.proactiveMessageText}</p>
+          </div>
+        )}
+        <button className={`widget-bubble ${positionClass}`} style={accentStyle} onClick={() => setOpen(true)} aria-label="Open chat">
+          <img src={chatIcon} alt="" className="widget-bubble-icon" />
+        </button>
+      </>
     );
   }
 
@@ -233,7 +270,31 @@ export function ChatWidget() {
           </div>
 
           {conversation?.status === "CLOSED" ? (
-            <p className="muted widget-closed-note">This conversation has been closed.</p>
+            <div className="widget-closed-note">
+              <p className="muted">This conversation has been closed.</p>
+              {conversation.rating == null && !ratingSubmitted ? (
+                <div className="csat-prompt">
+                  <p>How was your experience?</p>
+                  <div className="csat-stars">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        className={`csat-star ${star <= ratingHover ? "hover" : ""}`}
+                        onMouseEnter={() => setRatingHover(star)}
+                        onMouseLeave={() => setRatingHover(0)}
+                        onClick={() => onSubmitRating(star)}
+                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                (conversation.rating != null || ratingSubmitted) && <p className="muted csat-thanks">Thanks for your feedback!</p>
+              )}
+            </div>
           ) : (
             <form className="composer" onSubmit={onSubmit}>
               <div className="composer-row">

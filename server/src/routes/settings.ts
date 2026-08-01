@@ -3,13 +3,14 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAgent, requireRole } from "../middleware/auth.js";
 import { getOrCreateWidgetSettings, SETTINGS_ID } from "../lib/widgetSettings.js";
+import { isEmailConfigured } from "../lib/email.js";
 
 const router = Router();
 router.use(requireAgent);
 
 router.get("/widget", async (_req, res) => {
   const settings = await getOrCreateWidgetSettings();
-  res.json({ settings });
+  res.json({ settings, isEmailConfigured });
 });
 
 const updateSchema = z.object({
@@ -22,6 +23,12 @@ const updateSchema = z.object({
   welcomeMessage: z.string().min(1).max(500).optional(),
   awayMessage: z.string().min(1).max(500).optional(),
   logoUrl: z.string().max(500).nullable().optional(),
+  proactiveMessageEnabled: z.boolean().optional(),
+  proactiveMessageText: z.string().min(1).max(200).optional(),
+  proactiveMessageDelaySeconds: z.number().int().min(3).max(300).optional(),
+  notifyEmail: z.string().email().or(z.literal("")).nullable().optional(),
+  emailNotificationsEnabled: z.boolean().optional(),
+  whatsappNotificationsEnabled: z.boolean().optional(),
 });
 
 router.patch("/widget", requireRole(["Owner", "Admin"]), async (req, res) => {
@@ -30,7 +37,8 @@ router.patch("/widget", requireRole(["Owner", "Admin"]), async (req, res) => {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
   await getOrCreateWidgetSettings();
-  const settings = await prisma.widgetSettings.update({ where: { id: SETTINGS_ID }, data: parsed.data });
+  const data = { ...parsed.data, notifyEmail: parsed.data.notifyEmail === "" ? null : parsed.data.notifyEmail };
+  const settings = await prisma.widgetSettings.update({ where: { id: SETTINGS_ID }, data });
   res.json({ settings });
 });
 

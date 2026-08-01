@@ -10,6 +10,12 @@
   // hard-edged clip at the iframe boundary.
   var CLOSED_SIZE = { width: "130px", height: "130px" };
   var OPEN_SIZE = { width: "440px", height: "620px" };
+  var PROACTIVE_SIZE = { width: "320px", height: "230px" };
+  var MOBILE_BREAKPOINT = 480;
+
+  var isOpen = false;
+  var isProactiveVisible = false;
+  var side = "right";
 
   var iframe = document.createElement("iframe");
   iframe.id = "river-widget-frame";
@@ -17,16 +23,41 @@
   iframe.title = "Chat widget";
   iframe.setAttribute("allowtransparency", "true");
   iframe.style.position = "fixed";
-  iframe.style.bottom = "0";
-  iframe.style.right = "0";
-  iframe.style.width = CLOSED_SIZE.width;
-  iframe.style.height = CLOSED_SIZE.height;
   iframe.style.border = "none";
   iframe.style.background = "transparent";
   iframe.style.zIndex = "2147483647";
   iframe.style.colorScheme = "light";
 
+  function applyLayout() {
+    iframe.style.bottom = "0";
+    if (isOpen && window.innerWidth <= MOBILE_BREAKPOINT) {
+      // Full-screen on small viewports, matching the widget's own
+      // @media (max-width: 480px) panel styling.
+      iframe.style.top = "0";
+      iframe.style.left = "0";
+      iframe.style.right = "0";
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      return;
+    }
+
+    iframe.style.top = "auto";
+    if (side === "left") {
+      iframe.style.left = "0";
+      iframe.style.right = "auto";
+    } else {
+      iframe.style.right = "0";
+      iframe.style.left = "auto";
+    }
+
+    var size = isOpen ? OPEN_SIZE : isProactiveVisible ? PROACTIVE_SIZE : CLOSED_SIZE;
+    iframe.style.width = size.width;
+    iframe.style.height = size.height;
+  }
+
+  applyLayout();
   document.body.appendChild(iframe);
+  window.addEventListener("resize", applyLayout);
 
   window.addEventListener("message", function (event) {
     if (event.origin !== origin || event.source !== iframe.contentWindow) return;
@@ -34,19 +65,16 @@
     if (!data || data.source !== "river-widget") return;
 
     if (data.type === "open") {
-      iframe.style.width = OPEN_SIZE.width;
-      iframe.style.height = OPEN_SIZE.height;
+      isOpen = true;
     } else if (data.type === "closed") {
-      iframe.style.width = CLOSED_SIZE.width;
-      iframe.style.height = CLOSED_SIZE.height;
+      isOpen = false;
+    } else if (data.type === "proactive") {
+      isProactiveVisible = Boolean(data.visible);
     } else if (data.type === "position") {
-      if (data.side === "left") {
-        iframe.style.left = "0";
-        iframe.style.right = "auto";
-      } else {
-        iframe.style.right = "0";
-        iframe.style.left = "auto";
-      }
+      side = data.side === "left" ? "left" : "right";
+    } else {
+      return;
     }
+    applyLayout();
   });
 })();

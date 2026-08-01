@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAgent } from "../middleware/auth.js";
+import { triggerWebhooks } from "../lib/webhooks.js";
 import type { IoServer } from "../socket/index.js";
 
 export function conversationsRouter(io: IoServer) {
@@ -36,6 +37,93 @@ export function conversationsRouter(io: IoServer) {
         unreadCount: c._count.messages,
       })),
     });
+  });
+
+  const archiveQuerySchema = z.object({
+    q: z.string().max(200).optional(),
+    from: z.string().datetime().optional(),
+    to: z.string().datetime().optional(),
+  });
+
+  function buildArchiveWhere(query: unknown) {
+    const parsed = archiveQuerySchema.safeParse(query);
+    const q = parsed.success ? parsed.data.q : undefined;
+    const from = parsed.success ? parsed.data.from : undefined;
+    const to = parsed.success ? parsed.data.to : undefined;
+
+    return {
+      status: "CLOSED" as const,
+      ...(q
+        ? {
+            OR: [
+              { visitorName: { contains: q, mode: "insensitive" as const } },
+              { visitorEmail: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+      ...(from || to
+        ? {
+            createdAt: {
+              ...(from ? { gte: new Date(from) } : {}),
+              ...(to ? { lte: new Date(to) } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  // Archives: closed conversations, searchable by visitor name/email and
+  // filterable by date range.
+  router.get("/archives", async (req, res) => {
+    const conversations = await prisma.conversation.findMany({
+      where: buildArchiveWhere(req.query),
+      orderBy: { closedAt: "desc" },
+      include: {
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        assignedAgent: { select: { id: true, name: true } },
+      },
+      take: 200,
+    });
+
+    res.json({
+      conversations: conversations.map((c) => ({
+        id: c.id,
+        visitorName: c.visitorName,
+        visitorEmail: c.visitorEmail,
+        status: c.status,
+        assignedAgent: c.assignedAgent,
+        createdAt: c.createdAt,
+        closedAt: c.closedAt,
+        rating: c.rating,
+        lastMessage: c.messages[0] ?? null,
+      })),
+    });
+  });
+
+  router.get("/archives/export.csv", async (req, res) => {
+    const conversations = await prisma.conversation.findMany({
+      where: buildArchiveWhere(req.query),
+      orderBy: { closedAt: "desc" },
+      include: { assignedAgent: { select: { name: true } } },
+      take: 5000,
+    });
+
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const header = ["Visitor Name", "Visitor Email", "Assigned Agent", "Created At", "Closed At", "Rating"].join(",");
+    const rows = conversations.map((c) =>
+      [
+        escape(c.visitorName ?? ""),
+        escape(c.visitorEmail ?? ""),
+        escape(c.assignedAgent?.name ?? "Unassigned"),
+        escape(c.createdAt.toISOString()),
+        escape(c.closedAt?.toISOString() ?? ""),
+        escape(c.rating != null ? String(c.rating) : ""),
+      ].join(",")
+    );
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="conversations-export.csv"`);
+    res.send([header, ...rows].join("\n"));
   });
 
   router.get("/:id", async (req, res) => {
@@ -86,10 +174,17 @@ export function conversationsRouter(io: IoServer) {
         attachmentName: parsed.data.attachmentName,
       },
     });
-    await prisma.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        updatedAt: new Date(),
+        firstAgentReplyAt: conversation.firstAgentReplyAt ?? new Date(),
+      },
+    });
 
     io.to(`conversation:${conversation.id}`).emit("message:new", message);
     io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    triggerWebhooks("message.new", { conversationId: conversation.id, senderType: "AGENT", text: message.text });
 
     res.status(201).json({ message });
   });
@@ -107,17 +202,18 @@ export function conversationsRouter(io: IoServer) {
   router.post("/:id/close", async (req, res) => {
     const conversation = await prisma.conversation.update({
       where: { id: req.params.id },
-      data: { status: "CLOSED" },
+      data: { status: "CLOSED", closedAt: new Date() },
     });
     io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
     io.to(`conversation:${conversation.id}`).emit("conversation:closed", { conversationId: conversation.id });
+    triggerWebhooks("conversation.closed", { conversationId: conversation.id, visitorName: conversation.visitorName });
     res.json({ conversation });
   });
 
   router.post("/:id/reopen", async (req, res) => {
     const conversation = await prisma.conversation.update({
       where: { id: req.params.id },
-      data: { status: "OPEN" },
+      data: { status: "OPEN", closedAt: null },
     });
     io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
     res.json({ conversation });

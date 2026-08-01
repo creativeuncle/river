@@ -9,6 +9,9 @@ import uploadsRouter, { UPLOAD_DIR } from "./routes/uploads.js";
 import settingsRouter from "./routes/settings.js";
 import groupsRouter from "./routes/groups.js";
 import cannedRepliesRouter from "./routes/cannedReplies.js";
+import reportsRouter from "./routes/reports.js";
+import webhooksRouter from "./routes/webhooks.js";
+import billingRouter from "./routes/billing.js";
 import { createSocketServer } from "./socket/index.js";
 import { ensureOwnerExists } from "./lib/ensureOwner.js";
 
@@ -29,6 +32,9 @@ app.use("/api/uploads", uploadsRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/groups", groupsRouter);
 app.use("/api/canned-replies", cannedRepliesRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/webhooks", webhooksRouter);
+app.use("/api/billing", billingRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
