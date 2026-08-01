@@ -558,3 +558,15 @@ export function updateSuperAdminBilling(
     body: JSON.stringify(data),
   }).then((r) => handle(r));
 }
+
+export interface SuperAdminSummary {
+  totalAccounts: number;
+  totalAgents: number;
+  totalConversations: number;
+  mrr: number;
+  planBreakdown: { plan: string; count: number; price: number }[];
+}
+
+export function fetchSuperAdminSummary(token: string): Promise<SuperAdminSummary> {
+  return fetch(`${API_BASE}/api/superadmin/summary`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}

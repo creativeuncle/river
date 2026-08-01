@@ -1,0 +1,5 @@
+/* Tailwind for the Super Admin panel only. Preflight is intentionally
+   skipped so its base-element reset doesn't fight the rest of the app's
+   hand-written CSS in index.css (agent dashboard, widget, auth pages). */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);

@@ -13,8 +13,12 @@ import { ArchivesPage } from "./agent/ArchivesPage";
 import { BillingPage } from "./agent/BillingPage";
 import { ComingSoonPage } from "./agent/ComingSoonPage";
 import { useAgentAuth } from "./agent/AgentAuthContext";
-import { SuperAdminPage } from "./superadmin/SuperAdminPage";
-import { SuperAdminAccountPage } from "./superadmin/SuperAdminAccountPage";
+import { SuperAdminLayout } from "./superadmin/SuperAdminLayout";
+import { OverviewPage as SuperAdminOverviewPage } from "./superadmin/OverviewPage";
+import { ClientsPage as SuperAdminClientsPage } from "./superadmin/ClientsPage";
+import { ClientDetailPage as SuperAdminClientDetailPage } from "./superadmin/ClientDetailPage";
+import { BillingPage as SuperAdminBillingPage } from "./superadmin/BillingPage";
+import { RevenuePage as SuperAdminRevenuePage } from "./superadmin/RevenuePage";
 
 function RequireAgent({ children }: { children: React.ReactNode }) {
   const { session } = useAgentAuth();
@@ -85,18 +89,16 @@ function App() {
         path="/superadmin"
         element={
           <RequireAgent>
-            <SuperAdminPage />
+            <SuperAdminLayout />
           </RequireAgent>
         }
-      />
-      <Route
-        path="/superadmin/accounts/:id"
-        element={
-          <RequireAgent>
-            <SuperAdminAccountPage />
-          </RequireAgent>
-        }
-      />
+      >
+        <Route index element={<SuperAdminOverviewPage />} />
+        <Route path="clients" element={<SuperAdminClientsPage />} />
+        <Route path="clients/:id" element={<SuperAdminClientDetailPage />} />
+        <Route path="billing" element={<SuperAdminBillingPage />} />
+        <Route path="revenue" element={<SuperAdminRevenuePage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

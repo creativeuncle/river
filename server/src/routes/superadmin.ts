@@ -9,6 +9,35 @@ import { requireAgent, requireSuperAdmin } from "../middleware/auth.js";
 const router = Router();
 router.use(requireAgent, requireSuperAdmin);
 
+// No real payment gateway is wired up (see billing.ts) — these are just the
+// list prices used to estimate MRR for the Revenue page.
+const PLAN_PRICES: Record<string, number> = { Free: 0, Pro: 49, Business: 199 };
+
+router.get("/summary", async (_req, res) => {
+  const [accountCount, agentCount, conversationCount, billingRows] = await Promise.all([
+    prisma.account.count(),
+    prisma.agent.count(),
+    prisma.conversation.count(),
+    prisma.billingSettings.groupBy({ by: ["plan"], _count: { plan: true } }),
+  ]);
+
+  const accountsWithoutBilling = accountCount - billingRows.reduce((sum, r) => sum + r._count.plan, 0);
+  const planCounts = new Map<string, number>();
+  for (const row of billingRows) planCounts.set(row.plan, row._count.plan);
+  if (accountsWithoutBilling > 0) {
+    planCounts.set("Free", (planCounts.get("Free") ?? 0) + accountsWithoutBilling);
+  }
+
+  const planBreakdown = ["Free", "Pro", "Business"].map((plan) => ({
+    plan,
+    count: planCounts.get(plan) ?? 0,
+    price: PLAN_PRICES[plan],
+  }));
+  const mrr = planBreakdown.reduce((sum, p) => sum + p.count * p.price, 0);
+
+  res.json({ totalAccounts: accountCount, totalAgents: agentCount, totalConversations: conversationCount, mrr, planBreakdown });
+});
+
 router.get("/accounts", async (_req, res) => {
   const accounts = await prisma.account.findMany({
     orderBy: { createdAt: "desc" },
