@@ -21,13 +21,15 @@ const AGENT_SELECT = {
 
 const STRONG_PASSWORD = /^(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
 
-// The sidebar's Agents list and the Team page — any logged-in agent can see their teammates.
-router.get("/", requireAgent, async (_req, res) => {
+// The sidebar's Agents list and the Team page — scoped to the caller's own
+// account; teammates never see agents from another company.
+router.get("/", requireAgent, async (req, res) => {
   const agents = await prisma.agent.findMany({
+    where: { accountId: req.agent!.accountId },
     select: AGENT_SELECT,
     orderBy: { name: "asc" },
   });
-  res.json({ agents, onlineAgentIds: getOnlineAgentIds() });
+  res.json({ agents, onlineAgentIds: getOnlineAgentIds(req.agent!.accountId) });
 });
 
 const registerSchema = z.object({
@@ -37,7 +39,8 @@ const registerSchema = z.object({
   phone: z.string().max(30).optional(),
 });
 
-// Public self-signup — the very first agent in the system becomes Owner.
+// Public self-signup — every signup creates a brand new Account (company)
+// and the registering agent becomes its Owner.
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -50,15 +53,23 @@ router.post("/register", async (req, res) => {
     return res.status(409).json({ error: "An agent with this email already exists" });
   }
 
-  const agentCount = await prisma.agent.count();
   const passwordHash = await bcrypt.hash(password, 12);
   const agent = await prisma.agent.create({
-    data: { name, email, passwordHash, phone, role: agentCount === 0 ? "Owner" : "Agent" },
+    data: {
+      name,
+      email,
+      passwordHash,
+      phone,
+      role: "Owner",
+      account: { create: { name: `${name}'s Team` } },
+    },
     select: AGENT_SELECT,
   });
+  const accountId = (await prisma.agent.findUniqueOrThrow({ where: { id: agent.id }, select: { accountId: true } }))
+    .accountId;
 
-  const token = signAgentToken({ agentId: agent.id, name: agent.name, email: agent.email });
-  res.status(201).json({ token, agent });
+  const token = signAgentToken({ agentId: agent.id, accountId, name: agent.name, email: agent.email });
+  res.status(201).json({ token, agent: { ...agent, isSuperAdmin: false } });
 });
 
 const loginSchema = z.object({
@@ -82,8 +93,18 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid email or password" });
   }
 
-  const token = signAgentToken({ agentId: agent.id, name: agent.name, email: agent.email });
-  res.json({ token, agent: { id: agent.id, name: agent.name, email: agent.email, title: agent.title, role: agent.role } });
+  const token = signAgentToken({ agentId: agent.id, accountId: agent.accountId, name: agent.name, email: agent.email });
+  res.json({
+    token,
+    agent: {
+      id: agent.id,
+      name: agent.name,
+      email: agent.email,
+      title: agent.title,
+      role: agent.role,
+      isSuperAdmin: agent.isSuperAdmin,
+    },
+  });
 });
 
 const createTeammateSchema = z.object({
@@ -94,7 +115,8 @@ const createTeammateSchema = z.object({
 });
 
 // Team page "Add new agent" / "Invite agents" — creates the account directly
-// (there's no email/SMTP setup here to send a real invite link yet).
+// (there's no email/SMTP setup here to send a real invite link yet), joining
+// the inviter's own Account.
 router.post("/", requireAgent, requireRole(["Owner", "Admin"]), async (req, res) => {
   const parsed = createTeammateSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -109,7 +131,7 @@ router.post("/", requireAgent, requireRole(["Owner", "Admin"]), async (req, res)
 
   const passwordHash = await bcrypt.hash(password, 12);
   const agent = await prisma.agent.create({
-    data: { name, email, passwordHash, title },
+    data: { name, email, passwordHash, title, accountId: req.agent!.accountId },
     select: AGENT_SELECT,
   });
   res.status(201).json({ agent });
@@ -123,12 +145,18 @@ const updateSchema = z.object({
 });
 
 // Agents can edit their own name/title. Changing role, group, or someone
-// else's profile requires Owner/Admin.
+// else's profile requires Owner/Admin. Always scoped to the caller's own
+// account — an id from another account 404s rather than leaking existence.
 router.patch("/:id", requireAgent, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
+  const target = await prisma.agent.findUnique({ where: { id: req.params.id }, select: { accountId: true } });
+  if (!target || target.accountId !== req.agent!.accountId) {
+    return res.status(404).json({ error: "Agent not found" });
+  }
+
   const isSelf = req.params.id === req.agent!.agentId;
   const touchesRestrictedFields = parsed.data.role !== undefined || parsed.data.groupId !== undefined;
 
@@ -150,6 +178,10 @@ router.patch("/:id", requireAgent, async (req, res) => {
 router.delete("/:id", requireAgent, requireRole(["Owner", "Admin"]), async (req, res) => {
   if (req.params.id === req.agent!.agentId) {
     return res.status(400).json({ error: "You can't remove your own account" });
+  }
+  const target = await prisma.agent.findUnique({ where: { id: req.params.id }, select: { accountId: true } });
+  if (!target || target.accountId !== req.agent!.accountId) {
+    return res.status(404).json({ error: "Agent not found" });
   }
   await prisma.agent.delete({ where: { id: req.params.id } });
   res.status(204).end();

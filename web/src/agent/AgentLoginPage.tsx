@@ -55,7 +55,7 @@ export function AgentLoginPage() {
     setBusy(true);
     try {
       const res = await agentLogin(email, password);
-      login({ token: res.token, agentId: res.agent.id, name: res.agent.name, email: res.agent.email });
+      login({ token: res.token, agentId: res.agent.id, name: res.agent.name, email: res.agent.email, isSuperAdmin: res.agent.isSuperAdmin });
       navigate("/agent");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -81,7 +81,7 @@ export function AgentLoginPage() {
     try {
       const displayName = email.split("@")[0];
       const res = await agentRegister(displayName, email, password, phone.trim() || undefined);
-      login({ token: res.token, agentId: res.agent.id, name: res.agent.name, email: res.agent.email });
+      login({ token: res.token, agentId: res.agent.id, name: res.agent.name, email: res.agent.email, isSuperAdmin: res.agent.isSuperAdmin });
       navigate("/agent/onboarding");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

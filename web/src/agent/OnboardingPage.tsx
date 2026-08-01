@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CopyIcon, CheckmarkCircle01Icon, WhatsappIcon } from "@hugeicons/core-free-icons";
-import { updateAgent } from "../lib/api";
+import { fetchAgentWidgetSettings, updateAgent } from "../lib/api";
 import { useAgentAuth } from "./AgentAuthContext";
 import { RiverLogo } from "../components/RiverLogo";
 
@@ -30,8 +30,14 @@ export function OnboardingPage() {
   const [whatsapp, setWhatsapp] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [siteId, setSiteId] = useState("");
 
-  const embedSnippet = `<!-- Start of River widget -->\n<script>\n  window.__river = window.__river || {};\n  window.__river.siteId = "${session?.agentId ?? ""}";\n</script>\n<script src="${window.location.origin}/widget.js" async></script>\n<!-- End of River widget -->`;
+  useEffect(() => {
+    if (!session) return;
+    fetchAgentWidgetSettings(session.token).then((r) => setSiteId(r.siteId));
+  }, [session]);
+
+  const embedSnippet = `<!-- Start of River widget -->\n<script>\n  window.__river = window.__river || {};\n  window.__river.siteId = "${siteId}";\n</script>\n<script src="${window.location.origin}/widget.js" async></script>\n<!-- End of River widget -->`;
 
   async function onNameContinue() {
     if (!session || !name.trim()) return;

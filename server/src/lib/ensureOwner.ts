@@ -1,16 +1,23 @@
 import { prisma } from "../prisma.js";
 
-// Installs that existed before roles were added (or where the Owner was
-// deleted) would otherwise have no Owner/Admin at all, locking everyone out
-// of Team management and widget settings. Self-heal by promoting whoever
-// registered first.
+// Every account should have at least one Owner/Admin, or its team gets
+// locked out of Team management and widget settings. Normal signup always
+// makes the registering agent an Owner, but this self-heals older data (or
+// an account whose only Owner/Admin got deleted) by promoting whoever in
+// that account registered first.
 export async function ensureOwnerExists(): Promise<void> {
-  const ownerOrAdminExists = await prisma.agent.count({ where: { role: { in: ["Owner", "Admin"] } } });
-  if (ownerOrAdminExists > 0) return;
+  const accounts = await prisma.account.findMany({ select: { id: true } });
 
-  const earliest = await prisma.agent.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!earliest) return;
+  for (const { id: accountId } of accounts) {
+    const ownerOrAdminExists = await prisma.agent.count({
+      where: { accountId, role: { in: ["Owner", "Admin"] } },
+    });
+    if (ownerOrAdminExists > 0) continue;
 
-  await prisma.agent.update({ where: { id: earliest.id }, data: { role: "Owner" } });
-  console.log(`No Owner/Admin found — promoted "${earliest.name}" (${earliest.email}) to Owner.`);
+    const earliest = await prisma.agent.findFirst({ where: { accountId }, orderBy: { createdAt: "asc" } });
+    if (!earliest) continue;
+
+    await prisma.agent.update({ where: { id: earliest.id }, data: { role: "Owner" } });
+    console.log(`No Owner/Admin found for account ${accountId} — promoted "${earliest.name}" (${earliest.email}) to Owner.`);
+  }
 }

@@ -17,7 +17,7 @@ router.get("/summary", async (req, res) => {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const conversations = await prisma.conversation.findMany({
-    where: { createdAt: { gte: since } },
+    where: { accountId: req.agent!.accountId, createdAt: { gte: since } },
     select: {
       id: true,
       createdAt: true,

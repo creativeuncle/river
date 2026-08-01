@@ -5,8 +5,8 @@ export type WebhookEvent = "conversation.created" | "conversation.closed" | "mes
 // Fire-and-forget: POSTs the payload to every enabled webhook subscribed to
 // this event. Failures are logged, never thrown — a slow or broken webhook
 // endpoint must not block the request that triggered it.
-export async function triggerWebhooks(event: WebhookEvent, payload: unknown): Promise<void> {
-  const webhooks = await prisma.webhook.findMany({ where: { enabled: true, events: { has: event } } });
+export async function triggerWebhooks(accountId: string, event: WebhookEvent, payload: unknown): Promise<void> {
+  const webhooks = await prisma.webhook.findMany({ where: { accountId, enabled: true, events: { has: event } } });
   if (webhooks.length === 0) return;
 
   await Promise.all(

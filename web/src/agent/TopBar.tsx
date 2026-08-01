@@ -110,6 +110,7 @@ export function TopBar({
           </button>
           {showAvatarMenu && (
             <div className="team-row-menu" style={{ top: 36, right: 0, left: "auto" }}>
+              {session?.isSuperAdmin && <button onClick={() => navigate("/superadmin")}>Super Admin</button>}
               <button onClick={logout}>Log out</button>
             </div>
           )}

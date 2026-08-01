@@ -12,9 +12,10 @@ export function conversationsRouter(io: IoServer) {
   // Inbox list: newest activity first, with a preview of the last message
   // and an unread-by-agent count badge.
   router.get("/", async (req, res) => {
+    const accountId = req.agent!.accountId;
     const status = z.enum(["OPEN", "CLOSED"]).optional().safeParse(req.query.status);
     const conversations = await prisma.conversation.findMany({
-      where: status.success && status.data ? { status: status.data } : undefined,
+      where: { accountId, ...(status.success && status.data ? { status: status.data } : {}) },
       orderBy: { updatedAt: "desc" },
       include: {
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -45,13 +46,14 @@ export function conversationsRouter(io: IoServer) {
     to: z.string().datetime().optional(),
   });
 
-  function buildArchiveWhere(query: unknown) {
+  function buildArchiveWhere(accountId: string, query: unknown) {
     const parsed = archiveQuerySchema.safeParse(query);
     const q = parsed.success ? parsed.data.q : undefined;
     const from = parsed.success ? parsed.data.from : undefined;
     const to = parsed.success ? parsed.data.to : undefined;
 
     return {
+      accountId,
       status: "CLOSED" as const,
       ...(q
         ? {
@@ -76,7 +78,7 @@ export function conversationsRouter(io: IoServer) {
   // filterable by date range.
   router.get("/archives", async (req, res) => {
     const conversations = await prisma.conversation.findMany({
-      where: buildArchiveWhere(req.query),
+      where: buildArchiveWhere(req.agent!.accountId, req.query),
       orderBy: { closedAt: "desc" },
       include: {
         messages: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -102,7 +104,7 @@ export function conversationsRouter(io: IoServer) {
 
   router.get("/archives/export.csv", async (req, res) => {
     const conversations = await prisma.conversation.findMany({
-      where: buildArchiveWhere(req.query),
+      where: buildArchiveWhere(req.agent!.accountId, req.query),
       orderBy: { closedAt: "desc" },
       include: { assignedAgent: { select: { name: true } } },
       take: 5000,
@@ -126,20 +128,29 @@ export function conversationsRouter(io: IoServer) {
     res.send([header, ...rows].join("\n"));
   });
 
+  // Scoped to the caller's own account; a conversation id from another
+  // account 404s rather than leaking existence.
+  async function findOwnConversation(accountId: string, id: string) {
+    const conversation = await prisma.conversation.findUnique({ where: { id } });
+    if (!conversation || conversation.accountId !== accountId) return null;
+    return conversation;
+  }
+
   router.get("/:id", async (req, res) => {
+    const own = await findOwnConversation(req.agent!.accountId, req.params.id);
+    if (!own) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
     const conversation = await prisma.conversation.findUnique({
-      where: { id: req.params.id },
+      where: { id: own.id },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
         assignedAgent: { select: { id: true, name: true } },
       },
     });
-    if (!conversation) {
-      return res.status(404).json({ error: "Conversation not found" });
-    }
 
     await prisma.message.updateMany({
-      where: { conversationId: conversation.id, senderType: "CUSTOMER", readByAgent: false },
+      where: { conversationId: own.id, senderType: "CUSTOMER", readByAgent: false },
       data: { readByAgent: true },
     });
 
@@ -159,7 +170,8 @@ export function conversationsRouter(io: IoServer) {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const conversation = await prisma.conversation.findUnique({ where: { id: req.params.id } });
+    const accountId = req.agent!.accountId;
+    const conversation = await findOwnConversation(accountId, req.params.id);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
@@ -183,45 +195,64 @@ export function conversationsRouter(io: IoServer) {
     });
 
     io.to(`conversation:${conversation.id}`).emit("message:new", message);
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
-    triggerWebhooks("message.new", { conversationId: conversation.id, senderType: "AGENT", text: message.text });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
+    triggerWebhooks(accountId, "message.new", { conversationId: conversation.id, senderType: "AGENT", text: message.text });
 
     res.status(201).json({ message });
   });
 
   router.post("/:id/assign", async (req, res) => {
+    const accountId = req.agent!.accountId;
+    const own = await findOwnConversation(accountId, req.params.id);
+    if (!own) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
     const conversation = await prisma.conversation.update({
-      where: { id: req.params.id },
+      where: { id: own.id },
       data: { assignedAgentId: req.agent!.agentId },
       include: { assignedAgent: { select: { id: true, name: true } } },
     });
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
     res.json({ conversation });
   });
 
   router.post("/:id/close", async (req, res) => {
+    const accountId = req.agent!.accountId;
+    const own = await findOwnConversation(accountId, req.params.id);
+    if (!own) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
     const conversation = await prisma.conversation.update({
-      where: { id: req.params.id },
+      where: { id: own.id },
       data: { status: "CLOSED", closedAt: new Date() },
     });
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
     io.to(`conversation:${conversation.id}`).emit("conversation:closed", { conversationId: conversation.id });
-    triggerWebhooks("conversation.closed", { conversationId: conversation.id, visitorName: conversation.visitorName });
+    triggerWebhooks(accountId, "conversation.closed", { conversationId: conversation.id, visitorName: conversation.visitorName });
     res.json({ conversation });
   });
 
   router.post("/:id/reopen", async (req, res) => {
+    const accountId = req.agent!.accountId;
+    const own = await findOwnConversation(accountId, req.params.id);
+    if (!own) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
     const conversation = await prisma.conversation.update({
-      where: { id: req.params.id },
+      where: { id: own.id },
       data: { status: "OPEN", closedAt: null },
     });
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
     res.json({ conversation });
   });
 
   router.get("/:id/notes", async (req, res) => {
+    const own = await findOwnConversation(req.agent!.accountId, req.params.id);
+    if (!own) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
     const notes = await prisma.conversationNote.findMany({
-      where: { conversationId: req.params.id },
+      where: { conversationId: own.id },
       include: { agent: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -238,12 +269,13 @@ export function conversationsRouter(io: IoServer) {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const conversation = await prisma.conversation.findUnique({ where: { id: req.params.id } });
+    const accountId = req.agent!.accountId;
+    const conversation = await findOwnConversation(accountId, req.params.id);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
 
-    const allAgents = await prisma.agent.findMany({ select: { id: true, name: true } });
+    const allAgents = await prisma.agent.findMany({ where: { accountId }, select: { id: true, name: true } });
     const mentionedAgentIds = allAgents
       .filter((a) => parsed.data.text.toLowerCase().includes(`@${a.name.toLowerCase()}`))
       .map((a) => a.id);

@@ -13,6 +13,8 @@ import { ArchivesPage } from "./agent/ArchivesPage";
 import { BillingPage } from "./agent/BillingPage";
 import { ComingSoonPage } from "./agent/ComingSoonPage";
 import { useAgentAuth } from "./agent/AgentAuthContext";
+import { SuperAdminPage } from "./superadmin/SuperAdminPage";
+import { SuperAdminAccountPage } from "./superadmin/SuperAdminAccountPage";
 
 function RequireAgent({ children }: { children: React.ReactNode }) {
   const { session } = useAgentAuth();
@@ -79,6 +81,22 @@ function App() {
         <Route path="billing" element={<BillingPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
+      <Route
+        path="/superadmin"
+        element={
+          <RequireAgent>
+            <SuperAdminPage />
+          </RequireAgent>
+        }
+      />
+      <Route
+        path="/superadmin/accounts/:id"
+        element={
+          <RequireAgent>
+            <SuperAdminAccountPage />
+          </RequireAgent>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

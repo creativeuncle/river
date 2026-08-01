@@ -6,15 +6,17 @@ import { prisma } from "../prisma.js";
 export type IoServer = Server;
 
 // How many live sockets each agent currently has open (they might have
-// multiple tabs). An agent is "online" while this count is > 0.
-const onlineAgentSocketCounts = new Map<string, number>();
+// multiple tabs), plus which account they belong to. An agent is "online"
+// while their count is > 0.
+const onlineAgents = new Map<string, { accountId: string; count: number }>();
 
-export function getOnlineAgentIds(): string[] {
-  return [...onlineAgentSocketCounts.keys()];
+export function getOnlineAgentIds(accountId?: string): string[] {
+  const entries = [...onlineAgents.entries()];
+  return (accountId ? entries.filter(([, v]) => v.accountId === accountId) : entries).map(([id]) => id);
 }
 
-export function isAnyAgentOnline(): boolean {
-  return onlineAgentSocketCounts.size > 0;
+export function isAnyAgentOnline(accountId: string): boolean {
+  return [...onlineAgents.values()].some((v) => v.accountId === accountId);
 }
 
 // Two kinds of clients connect here: agents (authenticated with their JWT,
@@ -41,23 +43,26 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
 
   io.on("connection", (socket) => {
     const agentId: string | undefined = socket.data.agent?.agentId;
+    const accountId: string | undefined = socket.data.agent?.accountId;
 
-    if (agentId) {
-      socket.join("agents");
+    if (agentId && accountId) {
+      socket.join(`agents:${accountId}`);
       socket.join(`agent:${agentId}`);
 
-      const prevCount = onlineAgentSocketCounts.get(agentId) ?? 0;
-      onlineAgentSocketCounts.set(agentId, prevCount + 1);
-      if (prevCount === 0) {
-        io.to("agents").emit("presence:update", { agentId, online: true });
+      const prev = onlineAgents.get(agentId);
+      onlineAgents.set(agentId, { accountId, count: (prev?.count ?? 0) + 1 });
+      if (!prev) {
+        io.to(`agents:${accountId}`).emit("presence:update", { agentId, online: true });
       }
-      socket.emit("presence:list", { onlineAgentIds: getOnlineAgentIds() });
+      socket.emit("presence:list", { onlineAgentIds: getOnlineAgentIds(accountId) });
     }
 
     socket.on("conversation:join", async ({ conversationId, visitorId }: { conversationId: string; visitorId?: string }) => {
       if (typeof conversationId !== "string") return;
 
-      if (agentId) {
+      if (agentId && accountId) {
+        const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
+        if (conversation?.accountId !== accountId) return;
         // The plain "conversation:<id>" room is shared with the customer's
         // own socket (for message:new/typing) — internal-only events like
         // notes must go to this agent-only room instead, or they'd leak
@@ -79,14 +84,15 @@ export function createSocketServer(httpServer: HttpServer): IoServer {
     });
 
     socket.on("disconnect", async () => {
-      if (!agentId) return;
-      const count = (onlineAgentSocketCounts.get(agentId) ?? 1) - 1;
+      if (!agentId || !accountId) return;
+      const prev = onlineAgents.get(agentId);
+      const count = (prev?.count ?? 1) - 1;
       if (count <= 0) {
-        onlineAgentSocketCounts.delete(agentId);
+        onlineAgents.delete(agentId);
         await prisma.agent.update({ where: { id: agentId }, data: { lastSeenAt: new Date() } }).catch(() => {});
-        io.to("agents").emit("presence:update", { agentId, online: false });
+        io.to(`agents:${accountId}`).emit("presence:update", { agentId, online: false });
       } else {
-        onlineAgentSocketCounts.set(agentId, count);
+        onlineAgents.set(agentId, { accountId, count });
       }
     });
   });

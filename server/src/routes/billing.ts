@@ -6,20 +6,22 @@ import { requireAgent, requireRole } from "../middleware/auth.js";
 const router = Router();
 router.use(requireAgent);
 
-const SETTINGS_ID = "default";
-
-async function getOrCreateBillingSettings() {
+async function getOrCreateBillingSettings(accountId: string) {
   return prisma.billingSettings.upsert({
-    where: { id: SETTINGS_ID },
+    where: { accountId },
     update: {},
-    create: { id: SETTINGS_ID },
+    create: { accountId },
   });
 }
 
 // Internal bookkeeping only — no real payment gateway is wired up. Plan and
 // seat limit are just stored and displayed; nothing is actually charged.
-router.get("/", async (_req, res) => {
-  const [billing, seatCount] = await Promise.all([getOrCreateBillingSettings(), prisma.agent.count()]);
+router.get("/", async (req, res) => {
+  const accountId = req.agent!.accountId;
+  const [billing, seatCount] = await Promise.all([
+    getOrCreateBillingSettings(accountId),
+    prisma.agent.count({ where: { accountId } }),
+  ]);
   res.json({ billing, seatCount });
 });
 
@@ -33,8 +35,9 @@ router.patch("/", requireRole(["Owner", "Admin"]), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  await getOrCreateBillingSettings();
-  const billing = await prisma.billingSettings.update({ where: { id: SETTINGS_ID }, data: parsed.data });
+  const accountId = req.agent!.accountId;
+  await getOrCreateBillingSettings(accountId);
+  const billing = await prisma.billingSettings.update({ where: { accountId }, data: parsed.data });
   res.json({ billing });
 });
 

@@ -5,6 +5,7 @@ interface AgentSession {
   agentId: string;
   name: string;
   email: string;
+  isSuperAdmin?: boolean;
 }
 
 interface AgentAuthContextValue {

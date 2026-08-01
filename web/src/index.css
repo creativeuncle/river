@@ -2517,3 +2517,42 @@ input {
   opacity: 0.75;
   align-self: flex-start;
 }
+
+/* Super Admin */
+.superadmin-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 28px 60px;
+}
+
+.superadmin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 20px;
+}
+
+.superadmin-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.superadmin-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.superadmin-table th,
+.superadmin-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.superadmin-table th {
+  color: var(--muted);
+  font-weight: 500;
+}

@@ -62,7 +62,7 @@ export interface InboxConversation extends Conversation {
 
 export interface AgentAuthResponse {
   token: string;
-  agent: { id: string; name: string; email: string; title?: string | null; role?: string };
+  agent: { id: string; name: string; email: string; title?: string | null; role?: string; isSuperAdmin?: boolean };
 }
 
 export function agentRegister(
@@ -179,20 +179,24 @@ export function reopenConversation(token: string, conversationId: string): Promi
 }
 
 // ---- Widget (anonymous visitor) ----
+// Every call must identify which company's widget this is via siteId
+// (Account.siteId), passed by the embed snippet into the widget-embed
+// iframe's URL — see lib/visitor.ts's getSiteId().
 
-export function fetchMyConversation(visitorId: string): Promise<{ conversation: Conversation | null }> {
-  return fetch(`${API_BASE}/api/widget/conversations/mine?visitorId=${encodeURIComponent(visitorId)}`).then((r) =>
-    handle(r)
-  );
+export function fetchMyConversation(siteId: string, visitorId: string): Promise<{ conversation: Conversation | null }> {
+  return fetch(
+    `${API_BASE}/api/widget/conversations/mine?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(visitorId)}`
+  ).then((r) => handle(r));
 }
 
 export function startConversation(
+  siteId: string,
   visitorId: string,
   text: string,
   visitorName?: string,
   visitorEmail?: string
 ): Promise<{ conversation: Conversation }> {
-  return fetch(`${API_BASE}/api/widget/conversations`, {
+  return fetch(`${API_BASE}/api/widget/conversations?siteId=${encodeURIComponent(siteId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ visitorId, text, visitorName, visitorEmail }),
@@ -200,21 +204,26 @@ export function startConversation(
 }
 
 export function sendVisitorMessage(
+  siteId: string,
   conversationId: string,
   visitorId: string,
   text: string,
   attachment?: { url: string; name: string }
 ): Promise<{ message: Message }> {
-  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/messages`, {
+  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/messages?siteId=${encodeURIComponent(siteId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ visitorId, text, attachmentUrl: attachment?.url, attachmentName: attachment?.name }),
   }).then((r) => handle(r));
 }
 
-export function fetchVisitorMessages(conversationId: string, visitorId: string): Promise<{ messages: Message[] }> {
+export function fetchVisitorMessages(
+  siteId: string,
+  conversationId: string,
+  visitorId: string
+): Promise<{ messages: Message[] }> {
   return fetch(
-    `${API_BASE}/api/widget/conversations/${conversationId}/messages?visitorId=${encodeURIComponent(visitorId)}`
+    `${API_BASE}/api/widget/conversations/${conversationId}/messages?siteId=${encodeURIComponent(siteId)}&visitorId=${encodeURIComponent(visitorId)}`
   ).then((r) => handle(r));
 }
 
@@ -304,7 +313,7 @@ export async function deleteCannedReply(token: string, id: string): Promise<void
 // ---- Widget settings ----
 
 export interface WidgetSettings {
-  id: string;
+  accountId: string;
   companyName: string;
   primaryColor: string;
   position: "left" | "right";
@@ -319,17 +328,19 @@ export interface WidgetSettings {
   whatsappNotificationsEnabled: boolean;
 }
 
-export function fetchWidgetSettings(): Promise<{ settings: WidgetSettings }> {
-  return fetch(`${API_BASE}/api/widget/settings`).then((r) => handle(r));
+export function fetchWidgetSettings(siteId: string): Promise<{ settings: WidgetSettings }> {
+  return fetch(`${API_BASE}/api/widget/settings?siteId=${encodeURIComponent(siteId)}`).then((r) => handle(r));
 }
 
-export function fetchAgentWidgetSettings(token: string): Promise<{ settings: WidgetSettings; isEmailConfigured: boolean }> {
+export function fetchAgentWidgetSettings(
+  token: string
+): Promise<{ settings: WidgetSettings; isEmailConfigured: boolean; siteId: string }> {
   return fetch(`${API_BASE}/api/settings/widget`, { headers: agentHeaders(token) }).then((r) => handle(r));
 }
 
 export function updateWidgetSettings(
   token: string,
-  data: Partial<Omit<WidgetSettings, "id">>
+  data: Partial<Omit<WidgetSettings, "accountId">>
 ): Promise<{ settings: WidgetSettings }> {
   return fetch(`${API_BASE}/api/settings/widget`, {
     method: "PATCH",
@@ -341,12 +352,13 @@ export function updateWidgetSettings(
 // ---- CSAT rating ----
 
 export function submitRating(
+  siteId: string,
   conversationId: string,
   visitorId: string,
   rating: number,
   comment?: string
 ): Promise<{ conversation: Conversation }> {
-  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/rating`, {
+  return fetch(`${API_BASE}/api/widget/conversations/${conversationId}/rating?siteId=${encodeURIComponent(siteId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ visitorId, rating, comment }),
@@ -507,5 +519,42 @@ export function addNote(token: string, conversationId: string, text: string): Pr
     method: "POST",
     headers: { "Content-Type": "application/json", ...agentHeaders(token) },
     body: JSON.stringify({ text }),
+  }).then((r) => handle(r));
+}
+
+// ---- Super Admin (cross-account platform administration) ----
+
+export interface SuperAdminAccountSummary {
+  id: string;
+  name: string;
+  siteId: string;
+  createdAt: string;
+  agentCount: number;
+  conversationCount: number;
+  plan: string;
+  seatLimit: number;
+}
+
+export interface SuperAdminAccountDetail extends Omit<SuperAdminAccountSummary, "agentCount"> {
+  agents: { id: string; name: string; email: string; role: string; createdAt: string; lastSeenAt: string | null }[];
+}
+
+export function fetchSuperAdminAccounts(token: string): Promise<{ accounts: SuperAdminAccountSummary[] }> {
+  return fetch(`${API_BASE}/api/superadmin/accounts`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function fetchSuperAdminAccount(token: string, id: string): Promise<{ account: SuperAdminAccountDetail }> {
+  return fetch(`${API_BASE}/api/superadmin/accounts/${id}`, { headers: agentHeaders(token) }).then((r) => handle(r));
+}
+
+export function updateSuperAdminBilling(
+  token: string,
+  id: string,
+  data: { plan?: string; seatLimit?: number }
+): Promise<{ billing: { plan: string; seatLimit: number } }> {
+  return fetch(`${API_BASE}/api/superadmin/accounts/${id}/billing`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...agentHeaders(token) },
+    body: JSON.stringify(data),
   }).then((r) => handle(r));
 }

@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { isAnyAgentOnline, type IoServer } from "../socket/index.js";
@@ -7,45 +7,61 @@ import { sendNotificationEmail } from "../lib/email.js";
 import { triggerWebhooks } from "../lib/webhooks.js";
 
 // Everything under here is reachable by anonymous website visitors (no
-// login) — access to a conversation's data is gated purely by knowing its
+// login) — every request must identify which company's widget it's for via
+// a ?siteId= query param (the embed snippet sets this from Account.siteId).
+// Access to a conversation's data is additionally gated by knowing its
 // visitorId, a random id the widget generates and keeps in localStorage.
 export function widgetRouter(io: IoServer) {
   const router = Router();
 
+  async function resolveAccount(req: Request, res: Response, next: NextFunction) {
+    const siteId = typeof req.query.siteId === "string" ? req.query.siteId : undefined;
+    if (!siteId) {
+      return res.status(400).json({ error: "siteId is required" });
+    }
+    const account = await prisma.account.findUnique({ where: { siteId }, select: { id: true } });
+    if (!account) {
+      return res.status(404).json({ error: "Unknown site" });
+    }
+    res.locals.accountId = account.id;
+    next();
+  }
+  router.use(resolveAccount);
+
   // Public widget customization (color, welcome text, position, logo).
   router.get("/settings", async (_req, res) => {
-    const settings = await getOrCreateWidgetSettings();
+    const settings = await getOrCreateWidgetSettings(res.locals.accountId as string);
     res.json({ settings });
   });
 
-  async function assertOwnsConversation(conversationId: string, visitorId: string) {
+  async function assertOwnsConversation(accountId: string, conversationId: string, visitorId: string) {
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
-    if (!conversation || conversation.visitorId !== visitorId) return null;
+    if (!conversation || conversation.accountId !== accountId || conversation.visitorId !== visitorId) return null;
     return conversation;
   }
 
   // If no agent is currently online, auto-post the configured away message
   // once per conversation so the customer isn't left hanging.
-  async function maybeSendAwayMessage(conversationId: string) {
-    if (isAnyAgentOnline()) return;
+  async function maybeSendAwayMessage(accountId: string, conversationId: string) {
+    if (isAnyAgentOnline(accountId)) return;
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
     if (!conversation || conversation.awayMessageSent) return;
 
-    const settings = await getOrCreateWidgetSettings();
+    const settings = await getOrCreateWidgetSettings(accountId);
     const message = await prisma.message.create({
       data: { conversationId, senderType: "AGENT", text: settings.awayMessage, isAutomated: true },
     });
     await prisma.conversation.update({ where: { id: conversationId }, data: { awayMessageSent: true } });
 
     io.to(`conversation:${conversationId}`).emit("message:new", message);
-    io.to("agents").emit("conversation:updated", { conversationId });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId });
   }
 
   // If no agent is online, optionally email the configured notify address
   // so a message isn't missed entirely while everyone's away.
-  async function maybeNotifyOffline(conversationId: string, customerText: string) {
-    if (isAnyAgentOnline()) return;
-    const settings = await getOrCreateWidgetSettings();
+  async function maybeNotifyOffline(accountId: string, conversationId: string, customerText: string) {
+    if (isAnyAgentOnline(accountId)) return;
+    const settings = await getOrCreateWidgetSettings(accountId);
     if (!settings.emailNotificationsEnabled || !settings.notifyEmail) return;
     const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
     const from = conversation?.visitorName || conversation?.visitorEmail || "A visitor";
@@ -64,7 +80,7 @@ export function widgetRouter(io: IoServer) {
       return res.status(400).json({ error: "visitorId is required" });
     }
     const conversation = await prisma.conversation.findFirst({
-      where: { visitorId: visitorId.data },
+      where: { accountId: res.locals.accountId as string, visitorId: visitorId.data },
       orderBy: { updatedAt: "desc" },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
@@ -84,10 +100,12 @@ export function widgetRouter(io: IoServer) {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
+    const accountId = res.locals.accountId as string;
     const { visitorId, visitorName, visitorEmail, text } = parsed.data;
 
     const created = await prisma.conversation.create({
       data: {
+        accountId,
         visitorId,
         visitorName,
         visitorEmail,
@@ -95,10 +113,10 @@ export function widgetRouter(io: IoServer) {
       },
     });
 
-    io.to("agents").emit("conversation:new", { conversationId: created.id });
-    await maybeSendAwayMessage(created.id);
-    await maybeNotifyOffline(created.id, text);
-    triggerWebhooks("conversation.created", { conversationId: created.id, visitorName, visitorEmail, text });
+    io.to(`agents:${accountId}`).emit("conversation:new", { conversationId: created.id });
+    await maybeSendAwayMessage(accountId, created.id);
+    await maybeNotifyOffline(accountId, created.id, text);
+    triggerWebhooks(accountId, "conversation.created", { conversationId: created.id, visitorName, visitorEmail, text });
 
     const conversation = await prisma.conversation.findUnique({
       where: { id: created.id },
@@ -122,7 +140,8 @@ export function widgetRouter(io: IoServer) {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const conversation = await assertOwnsConversation(req.params.id, parsed.data.visitorId);
+    const accountId = res.locals.accountId as string;
+    const conversation = await assertOwnsConversation(accountId, req.params.id, parsed.data.visitorId);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
@@ -142,10 +161,10 @@ export function widgetRouter(io: IoServer) {
     });
 
     io.to(`conversation:${conversation.id}`).emit("message:new", message);
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
-    await maybeSendAwayMessage(conversation.id);
-    await maybeNotifyOffline(conversation.id, parsed.data.text);
-    triggerWebhooks("message.new", { conversationId: conversation.id, senderType: "CUSTOMER", text: parsed.data.text });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
+    await maybeSendAwayMessage(accountId, conversation.id);
+    await maybeNotifyOffline(accountId, conversation.id, parsed.data.text);
+    triggerWebhooks(accountId, "message.new", { conversationId: conversation.id, senderType: "CUSTOMER", text: parsed.data.text });
 
     res.status(201).json({ message });
   });
@@ -155,7 +174,7 @@ export function widgetRouter(io: IoServer) {
     if (!visitorId.success) {
       return res.status(400).json({ error: "visitorId is required" });
     }
-    const conversation = await assertOwnsConversation(req.params.id, visitorId.data);
+    const conversation = await assertOwnsConversation(res.locals.accountId as string, req.params.id, visitorId.data);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
@@ -185,7 +204,8 @@ export function widgetRouter(io: IoServer) {
     if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.flatten() });
     }
-    const conversation = await assertOwnsConversation(req.params.id, parsed.data.visitorId);
+    const accountId = res.locals.accountId as string;
+    const conversation = await assertOwnsConversation(accountId, req.params.id, parsed.data.visitorId);
     if (!conversation) {
       return res.status(404).json({ error: "Conversation not found" });
     }
@@ -197,7 +217,7 @@ export function widgetRouter(io: IoServer) {
       where: { id: conversation.id },
       data: { rating: parsed.data.rating, ratingComment: parsed.data.comment },
     });
-    io.to("agents").emit("conversation:updated", { conversationId: conversation.id });
+    io.to(`agents:${accountId}`).emit("conversation:updated", { conversationId: conversation.id });
 
     res.json({ conversation: updated });
   });

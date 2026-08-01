@@ -6,8 +6,11 @@ import { requireAgent } from "../middleware/auth.js";
 const router = Router();
 router.use(requireAgent);
 
-router.get("/", async (_req, res) => {
-  const cannedReplies = await prisma.cannedReply.findMany({ orderBy: { shortcut: "asc" } });
+router.get("/", async (req, res) => {
+  const cannedReplies = await prisma.cannedReply.findMany({
+    where: { accountId: req.agent!.accountId },
+    orderBy: { shortcut: "asc" },
+  });
   res.json({ cannedReplies });
 });
 
@@ -28,11 +31,14 @@ router.post("/", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  const existing = await prisma.cannedReply.findUnique({ where: { shortcut: parsed.data.shortcut } });
+  const accountId = req.agent!.accountId;
+  const existing = await prisma.cannedReply.findUnique({
+    where: { accountId_shortcut: { accountId, shortcut: parsed.data.shortcut } },
+  });
   if (existing) {
     return res.status(409).json({ error: "A canned reply with this shortcut already exists" });
   }
-  const cannedReply = await prisma.cannedReply.create({ data: parsed.data });
+  const cannedReply = await prisma.cannedReply.create({ data: { ...parsed.data, accountId } });
   res.status(201).json({ cannedReply });
 });
 
@@ -47,11 +53,19 @@ router.patch("/:id", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
+  const existing = await prisma.cannedReply.findUnique({ where: { id: req.params.id }, select: { accountId: true } });
+  if (!existing || existing.accountId !== req.agent!.accountId) {
+    return res.status(404).json({ error: "Canned reply not found" });
+  }
   const cannedReply = await prisma.cannedReply.update({ where: { id: req.params.id }, data: parsed.data });
   res.json({ cannedReply });
 });
 
 router.delete("/:id", async (req, res) => {
+  const existing = await prisma.cannedReply.findUnique({ where: { id: req.params.id }, select: { accountId: true } });
+  if (!existing || existing.accountId !== req.agent!.accountId) {
+    return res.status(404).json({ error: "Canned reply not found" });
+  }
   await prisma.cannedReply.delete({ where: { id: req.params.id } });
   res.status(204).end();
 });

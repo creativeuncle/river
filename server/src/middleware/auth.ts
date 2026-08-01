@@ -9,6 +9,7 @@ if (!JWT_SECRET) {
 
 export interface AgentAuthPayload {
   agentId: string;
+  accountId: string;
   name: string;
   email: string;
 }
@@ -54,4 +55,15 @@ export function requireRole(roles: string[]) {
     }
     next();
   };
+}
+
+// Platform-admin only (cross-account), unrelated to a normal account's own
+// Owner/Admin/Agent role. Always checked fresh from the DB — never trust the
+// JWT for this. Must run after requireAgent.
+export async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  const agent = await prisma.agent.findUnique({ where: { id: req.agent!.agentId }, select: { isSuperAdmin: true } });
+  if (!agent?.isSuperAdmin) {
+    return res.status(403).json({ error: "You don't have permission to do this" });
+  }
+  next();
 }

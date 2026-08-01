@@ -17,7 +17,7 @@ import {
   type WidgetSettings,
 } from "../lib/api";
 import { createSocket } from "../lib/socket";
-import { getVisitorId, getVisitorProfile, saveVisitorProfile } from "../lib/visitor";
+import { getSiteId, getVisitorId, getVisitorProfile, saveVisitorProfile } from "../lib/visitor";
 import { appendMessage } from "../lib/messages";
 import { isImageAttachment } from "../lib/attachments";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -41,9 +41,11 @@ export function ChatWidget() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textInputRef = useRef<HTMLInputElement>(null);
   const visitorId = useRef(getVisitorId());
+  const siteId = useRef(getSiteId());
 
   useEffect(() => {
-    fetchWidgetSettings().then((r) => setSettings(r.settings));
+    if (!siteId.current) return;
+    fetchWidgetSettings(siteId.current).then((r) => setSettings(r.settings));
   }, []);
 
   // Engage: show a proactive bubble if the visitor hasn't opened the widget
@@ -99,11 +101,11 @@ export function ChatWidget() {
   }, []);
 
   useEffect(() => {
-    if (!open || conversation) return;
-    fetchMyConversation(visitorId.current).then(async (r) => {
+    if (!open || conversation || !siteId.current) return;
+    fetchMyConversation(siteId.current, visitorId.current).then(async (r) => {
       if (r.conversation) {
         setConversation(r.conversation);
-        const msgs = await fetchVisitorMessages(r.conversation.id, visitorId.current);
+        const msgs = await fetchVisitorMessages(siteId.current, r.conversation.id, visitorId.current);
         setMessages(msgs.messages);
         socketRef.current?.emit("conversation:join", { conversationId: r.conversation.id, visitorId: visitorId.current });
       }
@@ -122,10 +124,12 @@ export function ChatWidget() {
   }
 
   async function send(body: string, attachment?: { url: string; name: string }) {
+    if (!siteId.current) return;
     setSending(true);
     try {
       if (!conversation) {
         const { conversation: created } = await startConversation(
+          siteId.current,
           visitorId.current,
           body || attachment!.name,
           profile?.name,
@@ -135,7 +139,7 @@ export function ChatWidget() {
         setMessages(created.messages ?? []);
         socketRef.current?.emit("conversation:join", { conversationId: created.id, visitorId: visitorId.current });
       } else {
-        const { message } = await sendVisitorMessage(conversation.id, visitorId.current, body, attachment);
+        const { message } = await sendVisitorMessage(siteId.current, conversation.id, visitorId.current, body, attachment);
         setMessages((prev) => appendMessage(prev, message));
       }
     } finally {
@@ -166,10 +170,10 @@ export function ChatWidget() {
   }
 
   async function onSubmitRating(rating: number) {
-    if (!conversation) return;
+    if (!conversation || !siteId.current) return;
     setRatingSubmitted(true);
     try {
-      await submitRating(conversation.id, visitorId.current, rating);
+      await submitRating(siteId.current, conversation.id, visitorId.current, rating);
       setConversation((prev) => (prev ? { ...prev, rating } : prev));
     } catch {
       setRatingSubmitted(false);

@@ -7,15 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// A support staff member who logs into the agent dashboard.
+// A subscribing company/customer of River — everything else (agents,
+// conversations, widget settings, billing, webhooks...) belongs to exactly
+// one Account. siteId is the public identifier the embedded widget script
+// uses to say "load this account's widget" (see public/widget.js).
+model Account {
+  id        String   @id @default(uuid())
+  name      String
+  siteId    String   @unique @default(uuid())
+  createdAt DateTime @default(now())
+
+  agents         Agent[]
+  conversations  Conversation[]
+  groups         Group[]
+  cannedReplies  CannedReply[]
+  webhooks       Webhook[]
+  widgetSettings WidgetSettings?
+  billingSettings BillingSettings?
+}
+
+// A support staff member who logs into the agent dashboard. Belongs to
+// exactly one Account. isSuperAdmin is unrelated to that account's own
+// Owner/Admin/Agent role — it grants access to the cross-account platform
+// admin panel (see /superadmin) and is never set by normal signup.
 model Agent {
   id           String    @id @default(uuid())
+  accountId    String
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   name         String
   email        String    @unique
   passwordHash String
   title        String?
   phone        String?
   role         String    @default("Agent") // "Owner" | "Admin" | "Agent"
+  isSuperAdmin Boolean   @default(false)
   groupId      String?
   group        Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
   lastSeenAt   DateTime?
@@ -24,15 +49,21 @@ model Agent {
   conversations Conversation[]
   messages      Message[]
   notes         ConversationNote[]
+
+  @@index([accountId])
 }
 
 // A team an agent can belong to (one group per agent for now).
 model Group {
   id        String   @id @default(uuid())
-  name      String   @unique
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name      String
   createdAt DateTime @default(now())
 
   agents Agent[]
+
+  @@unique([accountId, name])
 }
 
 enum ConversationStatus {
@@ -44,26 +75,28 @@ enum ConversationStatus {
 // A visitor is identified only by a client-generated id (stored in
 // their browser's localStorage) — no account/login required to chat.
 model Conversation {
-  id               String             @id @default(uuid())
-  visitorId        String
-  visitorName      String?
-  visitorEmail     String?
-  status           ConversationStatus @default(OPEN)
-  assignedAgentId  String?
-  assignedAgent    Agent?             @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
-  awayMessageSent  Boolean            @default(false)
+  id                String             @id @default(uuid())
+  accountId         String
+  account           Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  visitorId         String
+  visitorName       String?
+  visitorEmail      String?
+  status            ConversationStatus @default(OPEN)
+  assignedAgentId   String?
+  assignedAgent     Agent?             @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  awayMessageSent   Boolean            @default(false)
   firstAgentReplyAt DateTime?
-  closedAt         DateTime?
-  rating           Int?
-  ratingComment    String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  closedAt          DateTime?
+  rating            Int?
+  ratingComment     String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   messages Message[]
   notes    ConversationNote[]
 
-  @@index([visitorId])
-  @@index([status, updatedAt])
+  @@index([accountId, visitorId])
+  @@index([accountId, status, updatedAt])
 }
 
 enum SenderType {
@@ -107,15 +140,20 @@ model ConversationNote {
 // A reusable canned response agents can insert into a reply with "/shortcut".
 model CannedReply {
   id        String   @id @default(uuid())
-  shortcut  String   @unique
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  shortcut  String
   title     String
   text      String
   createdAt DateTime @default(now())
+
+  @@unique([accountId, shortcut])
 }
 
-// Single global row of widget customization + away-message settings.
+// One row per Account: widget customization + away-message settings.
 model WidgetSettings {
-  id             String  @id @default("default")
+  accountId      String  @id
+  account        Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   companyName    String  @default("Support")
   primaryColor   String  @default("#2f6fed")
   position       String  @default("right") // "left" | "right"
@@ -140,16 +178,21 @@ model WidgetSettings {
 // Zapier-style integration.
 model Webhook {
   id        String   @id @default(uuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   url       String
   events    String[] // subset of: "conversation.created", "conversation.closed", "message.new"
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  @@index([accountId])
 }
 
-// Single global row tracking the account's plan — internal bookkeeping only,
-// no real payment processing wired up yet.
+// One row per Account tracking its plan — internal bookkeeping only, no
+// real payment processing wired up yet.
 model BillingSettings {
-  id        String @id @default("default")
-  plan      String @default("Free") // "Free" | "Pro" | "Business"
-  seatLimit Int    @default(3)
+  accountId String  @id
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  plan      String  @default("Free") // "Free" | "Pro" | "Business"
+  seatLimit Int     @default(3)
 }

@@ -17,9 +17,11 @@
   var isProactiveVisible = false;
   var side = "right";
 
+  var siteId = (window.__river && window.__river.siteId) || "";
+
   var iframe = document.createElement("iframe");
   iframe.id = "river-widget-frame";
-  iframe.src = origin + "/widget-embed";
+  iframe.src = origin + "/widget-embed?siteId=" + encodeURIComponent(siteId);
   iframe.title = "Chat widget";
   iframe.setAttribute("allowtransparency", "true");
   iframe.style.position = "fixed";

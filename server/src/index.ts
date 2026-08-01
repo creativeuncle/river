@@ -12,6 +12,7 @@ import cannedRepliesRouter from "./routes/cannedReplies.js";
 import reportsRouter from "./routes/reports.js";
 import webhooksRouter from "./routes/webhooks.js";
 import billingRouter from "./routes/billing.js";
+import superadminRouter from "./routes/superadmin.js";
 import { createSocketServer } from "./socket/index.js";
 import { ensureOwnerExists } from "./lib/ensureOwner.js";
 
@@ -35,6 +36,7 @@ app.use("/api/canned-replies", cannedRepliesRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/webhooks", webhooksRouter);
 app.use("/api/billing", billingRouter);
+app.use("/api/superadmin", superadminRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

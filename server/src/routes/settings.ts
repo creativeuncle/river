@@ -2,15 +2,18 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAgent, requireRole } from "../middleware/auth.js";
-import { getOrCreateWidgetSettings, SETTINGS_ID } from "../lib/widgetSettings.js";
+import { getOrCreateWidgetSettings } from "../lib/widgetSettings.js";
 import { isEmailConfigured } from "../lib/email.js";
 
 const router = Router();
 router.use(requireAgent);
 
-router.get("/widget", async (_req, res) => {
-  const settings = await getOrCreateWidgetSettings();
-  res.json({ settings, isEmailConfigured });
+router.get("/widget", async (req, res) => {
+  const [settings, account] = await Promise.all([
+    getOrCreateWidgetSettings(req.agent!.accountId),
+    prisma.account.findUniqueOrThrow({ where: { id: req.agent!.accountId }, select: { siteId: true } }),
+  ]);
+  res.json({ settings, isEmailConfigured, siteId: account.siteId });
 });
 
 const updateSchema = z.object({
@@ -36,9 +39,9 @@ router.patch("/widget", requireRole(["Owner", "Admin"]), async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  await getOrCreateWidgetSettings();
+  await getOrCreateWidgetSettings(req.agent!.accountId);
   const data = { ...parsed.data, notifyEmail: parsed.data.notifyEmail === "" ? null : parsed.data.notifyEmail };
-  const settings = await prisma.widgetSettings.update({ where: { id: SETTINGS_ID }, data });
+  const settings = await prisma.widgetSettings.update({ where: { accountId: req.agent!.accountId }, data });
   res.json({ settings });
 });
 
