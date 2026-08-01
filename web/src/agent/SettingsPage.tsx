@@ -15,6 +15,14 @@ import {
 import { useAgentAuth } from "./AgentAuthContext";
 import type { AgentOutletContext } from "./AgentLayout";
 
+type Tab = "widget" | "notifications" | "webhooks";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "widget", label: "Widget settings" },
+  { id: "notifications", label: "Offline Notifications" },
+  { id: "webhooks", label: "Webhooks" },
+];
+
 function WebhooksSection({ token }: { token: string }) {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [availableEvents, setAvailableEvents] = useState<string[]>([]);
@@ -65,9 +73,8 @@ function WebhooksSection({ token }: { token: string }) {
   }
 
   return (
-    <div className="settings-section">
-      <h3>Webhooks</h3>
-      <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+    <div className="settings-tab-panel">
+      <p className="muted" style={{ marginBottom: 16 }}>
         Notify an external URL (e.g. a Zapier catch hook) when a conversation starts, closes, or gets a new message.
       </p>
 
@@ -114,6 +121,7 @@ function WebhooksSection({ token }: { token: string }) {
 export function SettingsPage() {
   const { session } = useAgentAuth();
   const { myRole } = useOutletContext<AgentOutletContext>();
+  const [tab, setTab] = useState<Tab>("widget");
   const [settings, setSettings] = useState<WidgetSettings | null>(null);
   const [isEmailConfigured, setIsEmailConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -179,153 +187,186 @@ export function SettingsPage() {
     );
   }
 
+  const SaveRow = (
+    <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+      <button type="submit" className="send-btn" disabled={saving}>
+        {saving ? "Saving…" : "Save changes"}
+      </button>
+      {saved && <span className="muted">Saved ✓</span>}
+    </div>
+  );
+
   return (
-    <div className="settings-page">
-      <h2>Widget settings</h2>
-      <p className="muted" style={{ marginBottom: 20 }}>
-        Customize how the chat widget looks and behaves on your website.
-      </p>
+    <div className="settings-page-wide">
+      <header className="team-page-header">
+        <h2>Settings</h2>
+      </header>
 
-      <form onSubmit={onSubmit} className="settings-form">
-        <label>
-          Company name
-          <input value={settings.companyName} onChange={(e) => setSettings({ ...settings, companyName: e.target.value })} />
-        </label>
+      <div className="team-tabs">
+        {TABS.map((t) => (
+          <button key={t.id} className={`team-tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-        <label>
-          Primary color
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="color"
-              value={settings.primaryColor}
-              onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-              style={{ width: 44, height: 36, padding: 2 }}
-            />
-            <input
-              value={settings.primaryColor}
-              onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-              style={{ flex: 1 }}
-            />
-          </div>
-        </label>
-
-        <label>
-          Widget position
-          <select value={settings.position} onChange={(e) => setSettings({ ...settings, position: e.target.value as "left" | "right" })}>
-            <option value="right">Bottom right</option>
-            <option value="left">Bottom left</option>
-          </select>
-        </label>
-
-        <label>
-          Welcome message
-          <textarea
-            className="note-input"
-            value={settings.welcomeMessage}
-            onChange={(e) => setSettings({ ...settings, welcomeMessage: e.target.value })}
-          />
-        </label>
-
-        <label>
-          Away message
-          <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-            Sent automatically to a new conversation when no agent is currently online.
-          </p>
-          <textarea
-            className="note-input"
-            value={settings.awayMessage}
-            onChange={(e) => setSettings({ ...settings, awayMessage: e.target.value })}
-          />
-        </label>
-
-        <label>
-          Logo
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {settings.logoUrl && (
-              <img
-                src={resolveAssetUrl(settings.logoUrl)}
-                alt="Logo"
-                style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-              />
-            )}
-            <input type="file" accept="image/*" onChange={onLogoPick} />
-          </div>
-        </label>
-
-        <div className="settings-section">
-          <h3>Engage: proactive message</h3>
-          <label className="settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={settings.proactiveMessageEnabled}
-              onChange={(e) => setSettings({ ...settings, proactiveMessageEnabled: e.target.checked })}
-            />
-            Show a proactive "Need help?" bubble if the visitor hasn't opened the widget yet
-          </label>
-          {settings.proactiveMessageEnabled && (
+      {tab === "webhooks" ? (
+        session && <WebhooksSection token={session.token} />
+      ) : (
+        <form onSubmit={onSubmit} className="settings-tab-panel settings-form">
+          {tab === "widget" && (
             <>
+              <div className="settings-grid-2">
+                <label>
+                  Company name
+                  <input
+                    value={settings.companyName}
+                    onChange={(e) => setSettings({ ...settings, companyName: e.target.value })}
+                  />
+                </label>
+
+                <label>
+                  Widget position
+                  <select
+                    value={settings.position}
+                    onChange={(e) => setSettings({ ...settings, position: e.target.value as "left" | "right" })}
+                  >
+                    <option value="right">Bottom right</option>
+                    <option value="left">Bottom left</option>
+                  </select>
+                </label>
+
+                <label>
+                  Primary color
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="color"
+                      value={settings.primaryColor}
+                      onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                      style={{ width: 44, height: 36, padding: 2 }}
+                    />
+                    <input
+                      value={settings.primaryColor}
+                      onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                </label>
+
+                <label>
+                  Logo
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {settings.logoUrl && (
+                      <img
+                        src={resolveAssetUrl(settings.logoUrl)}
+                        alt="Logo"
+                        style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
+                      />
+                    )}
+                    <input type="file" accept="image/*" onChange={onLogoPick} />
+                  </div>
+                </label>
+              </div>
+
               <label>
-                Message text
-                <input
-                  value={settings.proactiveMessageText}
-                  onChange={(e) => setSettings({ ...settings, proactiveMessageText: e.target.value })}
+                Welcome message
+                <textarea
+                  className="note-input"
+                  value={settings.welcomeMessage}
+                  onChange={(e) => setSettings({ ...settings, welcomeMessage: e.target.value })}
                 />
               </label>
+
               <label>
-                Delay before showing (seconds)
-                <input
-                  type="number"
-                  min={3}
-                  max={300}
-                  value={settings.proactiveMessageDelaySeconds}
-                  onChange={(e) => setSettings({ ...settings, proactiveMessageDelaySeconds: Number(e.target.value) })}
-                  style={{ maxWidth: 120 }}
+                Away message
+                <p className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                  Sent automatically to a new conversation when no agent is currently online.
+                </p>
+                <textarea
+                  className="note-input"
+                  value={settings.awayMessage}
+                  onChange={(e) => setSettings({ ...settings, awayMessage: e.target.value })}
                 />
               </label>
+
+              <div className="settings-section">
+                <h3>Engage: proactive message</h3>
+                <label className="settings-toggle-row">
+                  <input
+                    type="checkbox"
+                    checked={settings.proactiveMessageEnabled}
+                    onChange={(e) => setSettings({ ...settings, proactiveMessageEnabled: e.target.checked })}
+                  />
+                  Show a proactive "Need help?" bubble if the visitor hasn't opened the widget yet
+                </label>
+                {settings.proactiveMessageEnabled && (
+                  <div className="settings-grid-2">
+                    <label>
+                      Message text
+                      <input
+                        value={settings.proactiveMessageText}
+                        onChange={(e) => setSettings({ ...settings, proactiveMessageText: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      Delay before showing (seconds)
+                      <input
+                        type="number"
+                        min={3}
+                        max={300}
+                        value={settings.proactiveMessageDelaySeconds}
+                        onChange={(e) =>
+                          setSettings({ ...settings, proactiveMessageDelaySeconds: Number(e.target.value) })
+                        }
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {error && <p className="error">{error}</p>}
+              {SaveRow}
             </>
           )}
-        </div>
 
-        <div className="settings-section">
-          <h3>Offline notifications</h3>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Get notified when a customer messages in and no agent is currently online.
-          </p>
-          <label className="settings-toggle-row">
-            <input
-              type="checkbox"
-              checked={settings.emailNotificationsEnabled}
-              onChange={(e) => setSettings({ ...settings, emailNotificationsEnabled: e.target.checked })}
-              disabled={!isEmailConfigured}
-            />
-            Email notifications {!isEmailConfigured && <span className="muted">(not configured — set SMTP_HOST/SMTP_USER/SMTP_PASS)</span>}
-          </label>
-          {settings.emailNotificationsEnabled && isEmailConfigured && (
-            <label>
-              Notify email address
-              <input
-                type="email"
-                value={settings.notifyEmail ?? ""}
-                onChange={(e) => setSettings({ ...settings, notifyEmail: e.target.value })}
-              />
-            </label>
+          {tab === "notifications" && (
+            <>
+              <p className="muted" style={{ marginBottom: 8 }}>
+                Get notified when a customer messages in and no agent is currently online.
+              </p>
+              <label className="settings-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={settings.emailNotificationsEnabled}
+                  onChange={(e) => setSettings({ ...settings, emailNotificationsEnabled: e.target.checked })}
+                  disabled={!isEmailConfigured}
+                />
+                Email notifications{" "}
+                {!isEmailConfigured && (
+                  <span className="muted">(not configured — set SMTP_HOST/SMTP_USER/SMTP_PASS)</span>
+                )}
+              </label>
+              {settings.emailNotificationsEnabled && isEmailConfigured && (
+                <label>
+                  Notify email address
+                  <input
+                    type="email"
+                    value={settings.notifyEmail ?? ""}
+                    onChange={(e) => setSettings({ ...settings, notifyEmail: e.target.value })}
+                  />
+                </label>
+              )}
+              <label className="settings-toggle-row" style={{ marginTop: 10 }}>
+                <input type="checkbox" checked={false} disabled title="Coming soon" />
+                WhatsApp notifications <span className="muted">(coming soon)</span>
+              </label>
+
+              {error && <p className="error">{error}</p>}
+              {SaveRow}
+            </>
           )}
-          <label className="settings-toggle-row" style={{ marginTop: 10 }}>
-            <input type="checkbox" checked={false} disabled title="Coming soon" />
-            WhatsApp notifications <span className="muted">(coming soon)</span>
-          </label>
-        </div>
-
-        {error && <p className="error">{error}</p>}
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button type="submit" className="send-btn" disabled={saving}>
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-          {saved && <span className="muted">Saved ✓</span>}
-        </div>
-      </form>
-
-      {session && <WebhooksSection token={session.token} />}
+        </form>
+      )}
     </div>
   );
 }
