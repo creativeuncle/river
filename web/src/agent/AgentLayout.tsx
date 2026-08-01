@@ -181,7 +181,6 @@ export function AgentLayout() {
       <div className={`agent-shell ${sidebarExpanded ? "" : "sidebar-collapsed"}`}>
         <Sidebar
           conversations={conversations}
-          agents={agents}
           onlineAgentIds={onlineAgentIds}
           currentAgentId={session.agentId}
           currentAgentName={session.name}

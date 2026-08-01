@@ -1,6 +1,5 @@
 import { HugeiconsIcon, type HugeiconsIconProps } from "@hugeicons/react";
 import {
-  SearchIcon,
   Home01Icon,
   Chat01Icon,
   Megaphone01Icon,
@@ -17,7 +16,7 @@ import {
   Tag01Icon,
   Logout01Icon,
 } from "@hugeicons/core-free-icons";
-import type { Agent, InboxConversation } from "../lib/api";
+import type { InboxConversation } from "../lib/api";
 import { initials } from "../lib/avatar";
 import { ThemeToggle } from "../theme/ThemeToggle";
 
@@ -63,7 +62,6 @@ function PresenceDot({ online }: { online: boolean }) {
 
 export function Sidebar({
   conversations,
-  agents,
   onlineAgentIds,
   currentAgentId,
   currentAgentName,
@@ -79,7 +77,6 @@ export function Sidebar({
   onLogout,
 }: {
   conversations: InboxConversation[];
-  agents: Agent[];
   onlineAgentIds: Set<string>;
   currentAgentId: string;
   currentAgentName: string;
@@ -138,18 +135,15 @@ export function Sidebar({
         <ThemeToggle />
       </div>
 
-      <div className="sidebar-search">
-        <div className="search-box">
-          <HugeiconsIcon icon={SearchIcon} size={16} />
-          <input placeholder="Search chat" />
-        </div>
-      </div>
-
       <div className="sidebar-section">
         {visibleNavItems.map(({ key, label, icon }) => (
-          <button key={key} className={`sidebar-row ${activeSection === key ? "active" : ""}`} onClick={() => onNavigate(key)}>
+          <button
+            key={key}
+            className={`sidebar-row sidebar-row-lg ${activeSection === key ? "active" : ""}`}
+            onClick={() => onNavigate(key)}
+          >
             <span className="row-icon">
-              <HugeiconsIcon icon={icon} size={15} />
+              <HugeiconsIcon icon={icon} size={20} />
             </span>
             <span className="row-label">{label}</span>
           </button>
@@ -216,27 +210,6 @@ export function Sidebar({
           </div>
         </>
       )}
-
-      <div className="sidebar-section sidebar-agents">
-        <div className="sidebar-section-title">
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <HugeiconsIcon icon={UserGroupIcon} size={13} />
-            Agents
-          </span>
-        </div>
-        {agents.map((a) => (
-          <div className="agent-row" key={a.id}>
-            <div className="agent-avatar">{initials(a.name)}</div>
-            <div className="agent-row-text">
-              <span className="agent-row-name">{a.name}</span>
-              <span className="agent-row-status">
-                <PresenceDot online={onlineAgentIds.has(a.id)} />
-                {onlineAgentIds.has(a.id) ? "Online" : "Offline"}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
 
       <div className="sidebar-footer">
         <div className="agent-row">

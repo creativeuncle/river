@@ -1259,6 +1259,13 @@ input {
   color: var(--text-muted);
 }
 
+.sidebar-row-lg {
+  padding: 10px 10px;
+  gap: 12px;
+  font-size: 15px;
+  border-radius: 8px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
